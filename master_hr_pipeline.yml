@@ -1,0 +1,54 @@
+---
+- name: End-to-End HR Lifecycle Automation & Synchronization Pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # Phase 1: Generate HR Synthetic Data
+    # -------------------------------------------------------------------------
+    - name: "Phase 1 | Execute Synthetic HR Data Generator"
+      ansible.builtin.command:
+        cmd: python3 scripts/generate_hr_data.py
+      register: hr_script_output
+      changed_when: true
+
+    - name: "Phase 1 | Extract Generated Log Lines"
+      ansible.builtin.set_fact:
+        raw_events: "{{ hr_script_output.stdout_lines | select('match', '^\\s*\\[.*\\]') | list }}"
+
+    # -------------------------------------------------------------------------
+    # Phase 2: Trigger Downstream Sync (site.yml)
+    # -------------------------------------------------------------------------
+    - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
+      ansible.builtin.command:
+        cmd: ansible-playbook site.yml
+      register: sync_result
+      ignore_errors: true
+
+    # -------------------------------------------------------------------------
+    # Phase 3: Display Aesthetic Pipeline Recap
+    # -------------------------------------------------------------------------
+    - name: "Phase 3 | Render Executive Lifecycle Summary"
+      ansible.builtin.debug:
+        msg: |
+          ========================================================================
+                          HR LIFECYCLE AUTOMATION REPORT                    
+          ========================================================================
+          Overall Sync Status : {{ 'SUCCESS' if (sync_result.rc == 0) else 'FAILED' }}
+          ------------------------------------------------------------------------
+          PROCESSED LIFECYCLE EVENTS:
+          {% if raw_events | length > 0 %}
+          {% for event in raw_events %}
+            {{ event }}
+          {% endfor %}
+          {% else %}
+            No new events generated in this cycle.
+          {% endif %}
+          ------------------------------------------------------------------------
+          TARGET SYNCHRONIZATION SUMMARY:
+            - PostgreSQL HR DB : UPDATED
+            - Authentik SSO    : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
+            - Active Directory : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
+          ========================================================================

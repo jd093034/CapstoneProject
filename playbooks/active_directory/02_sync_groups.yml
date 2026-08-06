@@ -6,7 +6,7 @@
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
-    - name: Ensure Active Directory security groups exist
+    - name: Ensure AD groups exist in Security Groups OU and sync memberships
       microsoft.ad.group:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
@@ -15,23 +15,14 @@
         name: "{{ item.group }}"
         scope: "global"
         category: "security"
-        state: present
-      loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
-      loop_control:
-        label: "{{ item.group }}"
-      when: hostvars['localhost']['dynamic_user_group_assignments'] is defined and (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
-
-    - name: Sync group memberships in Active Directory
-      microsoft.ad.group:
-        domain_username: "{{ vault_ad_admin_user }}"
-        domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ inventory_hostname }}"
-        
-        name: "{{ item.group }}"
+        path: "OU=Security Groups,OU=APEX Lab,DC=apex,DC=lab"
         members:
-          add: "{{ item.members.add }}"
+          add: "{{ item.members.add | default([]) }}"
+          remove: "{{ item.members.remove | default([]) }}"
         state: present
       loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
       loop_control:
         label: "{{ item.group }}"
-      when: hostvars['localhost']['dynamic_user_group_assignments'] is defined and (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
+      when: 
+        - hostvars['localhost']['dynamic_user_group_assignments'] is defined
+        - (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
