@@ -1,10 +1,14 @@
 # ==============================================================================
-# Master Playbook: Full HR-to-Authentik Identity Lifecycle Pipeline
+# Master Playbook: Full HR-to-Authentik & AD Identity Lifecycle Pipeline
 # ==============================================================================
 
-# Authentik
+# 1. Extract Data from PostgreSQL (Required First Step)
+- import_playbook: playbooks/postgreSQL/00_fetch_hr_data.yml
+
+# 2. Authentik Provisioning
 - import_playbook: playbooks/authentik/01_groups_to_authentik.yml
 - import_playbook: playbooks/authentik/02_users_to_authentik.yml
 - import_playbook: playbooks/authentik/03_deprovision_authentik.yml
 
-# AD
+# 3. Active Directory Provisioning
+- import_playbook: playbooks/active_directory/site_ad.yml
