@@ -1,0 +1,73 @@
+---
+- name: Extract Identity Lifecycle Data from PostgreSQL HR Database
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
+  tasks:
+    - name: Query Active Employees from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT 
+            username, 
+            first_name, 
+            last_name, 
+            email, 
+            department,
+            'present' AS state
+          FROM employees
+          WHERE status = 'ACTIVE';
+      register: pg_users_result
+
+    - name: Query User-to-Group Mappings from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT 
+            department AS group_name, 
+            ARRAY_AGG(username) AS members
+          FROM employees
+          WHERE status = 'ACTIVE' AND department IS NOT NULL
+          GROUP BY department;
+      register: pg_groups_result
+
+    - name: Map PostgreSQL rows into dynamic pipeline facts
+      ansible.builtin.set_fact:
+        cacheable: true
+        dynamic_ad_users: "{{ pg_users_result.query_result }}"
+        dynamic_user_group_assignments: "{{ raw_group_json | from_json }}"
+      vars:
+        raw_group_json: >-
+          [
+            {% for row in pg_groups_result.query_result %}
+            {
+              "group": "{{ row.group_name }}",
+              "members": {
+                "add": {{ row.members | to_json }}
+              }
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+          ]
+
+    - name: Display Extracted HR Users Data
+      ansible.builtin.debug:
+        var: dynamic_ad_users
+
+    - name: Display Extracted Group Mappings
+      ansible.builtin.debug:
+        var: dynamic_user_group_assignments

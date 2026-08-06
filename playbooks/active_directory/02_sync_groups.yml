@@ -1,0 +1,35 @@
+---
+- name: Manage Active Directory Groups and Memberships from PostgreSQL
+  hosts: win_dc
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  tasks:
+    - name: Ensure Active Directory security groups exist
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ inventory_hostname }}"
+        
+        name: "{{ item.group }}"
+        scope: "global"
+        category: "security"
+        state: present
+      loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
+      loop_control:
+        label: "{{ item.group }}"
+
+    - name: Assign users to Active Directory groups
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ inventory_hostname }}"
+        
+        name: "{{ item.group }}"
+        scope: "global"
+        category: "security"
+        members: "{{ item.members }}"
+      loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
+      loop_control:
+        label: "{{ item.group }}"

@@ -1,0 +1,8 @@
+---
+# Security Template - Replace placeholder values with real credentials in your local vars/vault.yml
+vault_db_user: "database"
+vault_db_password: "database_password"
+vault_ad_admin_user: "Administrator@doman.name"
+vault_ad_admin_password: "ad_password"
+default_user_password: "default_user_password"
+ad_domain: "ad.domain"

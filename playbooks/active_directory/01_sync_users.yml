@@ -1,0 +1,32 @@
+---
+- name: Provision Users into Active Directory from PostgreSQL
+  hosts: win_dc
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  tasks:
+    - name: Ensure user exists in Active Directory
+      microsoft.ad.user:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ inventory_hostname }}"
+        
+        name: "{{ item.first_name }} {{ item.last_name }}"
+        firstname: "{{ item.first_name }}"
+        surname: "{{ item.last_name }}"
+        sam_account_name: "{{ item.username }}"
+        upn: "{{ item.username }}@{{ ad_domain }}"
+        email: "{{ item.email }}"
+        company: "Apex Lab"
+        
+        attributes:
+          set:
+            department: "{{ item.department }}"
+        
+        state: "{{ item.state | default('present') }}"
+        password: "{{ default_user_password }}"
+        password_never_expires: true
+      loop: "{{ hostvars['localhost']['dynamic_ad_users'] | default([]) }}"
+      loop_control:
+        label: "{{ item.username }}"

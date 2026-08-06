@@ -1,0 +1,7 @@
+---
+# Step 1: Run DB extraction on localhost first
+- import_playbook: ../postgreSQL/00_fetch_hr_data.yml
+# Step 2: Sync Users to AD
+- import_playbook: 01_sync_users.yml
+# Step 3: Sync Groups to AD
+- import_playbook: 02_sync_groups.yml

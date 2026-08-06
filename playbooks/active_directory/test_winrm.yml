@@ -1,0 +1,22 @@
+# ==============================================================================
+# Playbook: Test WinRM Connectivity to Active Directory DC
+# ==============================================================================
+- name: Verify WinRM Connection to Active Directory
+  hosts: win_dc
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  vars:
+    ansible_user: "{{ vault_ad_admin_user }}"
+    ansible_password: "{{ vault_ad_admin_password }}"
+
+  tasks:
+    - name: Ping Domain Controller
+      ansible.windows.win_ping:
+      register: winrm_result
+
+    - name: Display connection outcome
+      ansible.builtin.debug:
+        msg: "Successfully connected to Domain Controller via WinRM! Response: {{ winrm_result.ping }}"

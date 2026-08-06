@@ -1,0 +1,10 @@
+# ==============================================================================
+# Master Playbook: Full HR-to-Authentik Identity Lifecycle Pipeline
+# ==============================================================================
+
+# Authentik
+- import_playbook: playbooks/authentik/01_groups_to_authentik.yml
+- import_playbook: playbooks/authentik/02_users_to_authentik.yml
+- import_playbook: playbooks/authentik/03_deprovision_authentik.yml
+
+# AD

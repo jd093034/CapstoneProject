@@ -1,0 +1,39 @@
+# ==============================================================================
+# Sub-Playbook 1: Extract HR Departments & Ensure Authentik Groups Exist
+# ==============================================================================
+- name: Step 1 - Sync HR Departments to Authentik Groups
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+    authentik_url: "http://10.2.8.108:9000"
+
+  tasks:
+    - name: Fetch unique department list from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL;"
+      register: hr_departments
+
+    - name: Ensure department groups exist in Authentik
+      ansible.builtin.uri:
+        url: "{{ authentik_url }}/api/v3/core/groups/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ item.department }}"
+        status_code: [201, 400]
+      loop: "{{ hr_departments.query_result }}"
