@@ -23,7 +23,7 @@
     # -------------------------------------------------------------------------
     - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
       ansible.builtin.command:
-        cmd: ansible-playbook site.yml
+        cmd: ansible-playbook /playbooks/site.yml
       register: sync_result
       ignore_errors: true
 
