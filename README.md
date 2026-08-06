@@ -1,5 +1,11 @@
 # Capstone Project
 
+TODO: 
+
+- Email about Conflicts
+- Upload a CSV, parse the CSV with SQL and feed it to AD
+
+
 ansible-playbook -i inventory/hosts.ini site.yml --ask-vault-pass
 
 # Check users on AD
