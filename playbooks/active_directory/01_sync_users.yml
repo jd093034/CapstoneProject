@@ -8,7 +8,7 @@
   tasks:
     - name: Load active users JSON from controller
       ansible.builtin.set_fact:
-        active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/active_users.json') | from_json }}"
+        active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_users.json') | from_json }}"
       delegate_to: localhost
       run_once: true
 
@@ -25,7 +25,7 @@
       microsoft.ad.user:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ inventory_hostname }}"
+        domain_server: "{{ ad_hostname }}"
         name: "{{ item.first_name }} {{ item.last_name }}"
         given_name: "{{ item.first_name }}"
         surname: "{{ item.last_name }}"
