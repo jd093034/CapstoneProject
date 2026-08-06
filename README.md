@@ -1,5 +1,6 @@
 # Capstone Project
 
+ansible-playbook -i inventory/hosts.ini site.yml --ask-vault-pass
 
 # Check users on AD
 
