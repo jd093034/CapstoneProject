@@ -1,45 +1,24 @@
-# ==============================================================================
-# Sub-Playbook 3: Deprovision Inactive Users in Authentik
-# ==============================================================================
-- name: Step 3 - Deprovision Inactive Accounts
+---
+- name: Step 3 - Deprovision Inactive Accounts in Authentik
   hosts: localhost
-  gather_facts: false
-
   vars_files:
-    - "{{ playbook_dir }}/../../vars/vault.yml"
-
-  vars:
-    db_host: "10.2.8.106"
-    db_port: 5432
-    db_name: "hr_db"
-    authentik_url: "http://10.2.8.108:9000"
-
+    - "../../vars/vault.yml"
   tasks:
-    - name: Fetch inactive employee records from PostgreSQL
-      community.postgresql.postgresql_query:
-        login_host: "{{ db_host }}"
-        login_port: "{{ db_port }}"
-        login_db: "{{ db_name }}"
-        login_user: "{{ vault_db_user }}"
-        login_password: "{{ vault_db_password }}"
-        query: "SELECT username FROM employees WHERE status != 'ACTIVE';"
-      register: inactive_hr_users
-
     - name: Query Authentik status for inactive employees
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/users/?username={{ item.username }}"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?username={{ item.username }}"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: 200
-      # Ensure query_result is safely cast as a list, defaulting to [] if empty/dict
-      loop: "{{ (inactive_hr_users.query_result | default([])) if (inactive_hr_users.query_result is iterable and inactive_hr_users.query_result is not mapping) else [] }}"
-      register: inactive_users_check
+        validate_certs: no
+      loop: "{{ dynamic_inactive_users | default([]) }}"
+      register: authentik_inactive_check
+      check_mode: no
+      when: dynamic_inactive_users is defined and dynamic_inactive_users | length > 0
 
     - name: Deactivate accounts marked inactive in HR DB
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/users/{{ item.json.results[0].pk }}/"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.json.results[0].pk }}/"
         method: PATCH
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
@@ -48,8 +27,10 @@
         body:
           is_active: false
         status_code: 200
-      loop: "{{ (inactive_users_check.results | default([])) if (inactive_users_check.results is iterable and inactive_users_check.results is not mapping) else [] }}"
-      when:
+        validate_certs: no
+      loop: "{{ authentik_inactive_check.results | default([]) }}"
+      when: 
+        - item.skipped is not defined or not item.skipped
         - item.json is defined
         - item.json.pagination.count > 0
-        - item.json.results[0].is_active | bool
+        - item.json.results[0].is_active == true

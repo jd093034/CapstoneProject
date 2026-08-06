@@ -6,7 +6,7 @@
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
-    - name: Ensure user exists in Active Directory
+    - name: Ensure active users exist in Active Directory
       microsoft.ad.user:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
@@ -30,3 +30,18 @@
       loop: "{{ hostvars['localhost']['dynamic_ad_users'] | default([]) }}"
       loop_control:
         label: "{{ item.username }}"
+      when: hostvars['localhost']['dynamic_ad_users'] is defined and (hostvars['localhost']['dynamic_ad_users'] | length > 0)
+
+    - name: Disable inactive users in Active Directory
+      microsoft.ad.user:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ inventory_hostname }}"
+        
+        identity: "{{ item.username }}"
+        enabled: false
+        state: present
+      loop: "{{ hostvars['localhost']['dynamic_inactive_users'] | default([]) }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: hostvars['localhost']['dynamic_inactive_users'] is defined and (hostvars['localhost']['dynamic_inactive_users'] | length > 0)

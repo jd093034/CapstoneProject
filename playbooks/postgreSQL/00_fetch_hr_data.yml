@@ -1,72 +1,59 @@
 ---
 - name: Extract Identity Lifecycle Data from PostgreSQL HR Database
   hosts: localhost
-  gather_facts: false
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
-
-  vars:
-    db_host: "10.2.8.106"
-    db_port: 5432
-    db_name: "hr_db"
-
   tasks:
     - name: Query Active Employees from PostgreSQL
       community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
-        login_db: "{{ db_name }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
-        query: |
-          SELECT 
-            username, 
-            first_name, 
-            last_name, 
-            email, 
-            department,
-            'present' AS state
-          FROM employees
-          WHERE status = 'ACTIVE';
-      register: pg_users_result
+        query: "SELECT username, email, first_name, last_name, department FROM employees WHERE status = 'ACTIVE';"
+      register: active_hr_users
+
+    - name: Query Inactive Employees from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: "SELECT username, email, first_name, last_name, department FROM employees WHERE status = 'INACTIVE';"
+      register: inactive_hr_users
 
     - name: Query User-to-Group Mappings from PostgreSQL
       community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
-        login_db: "{{ db_name }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
-        query: |
-          SELECT 
-            department AS group_name, 
-            ARRAY_AGG(username) AS members
-          FROM employees
-          WHERE status = 'ACTIVE' AND department IS NOT NULL
-          GROUP BY department;
-      register: pg_groups_result
+        query: "SELECT department AS group, array_agg(username) AS members FROM employees WHERE status = 'ACTIVE' GROUP BY department;"
+      register: hr_group_mappings
 
     - name: Map PostgreSQL rows into dynamic pipeline facts
       ansible.builtin.set_fact:
-        cacheable: true
-        dynamic_ad_users: "{{ pg_users_result.query_result }}"
-        dynamic_user_group_assignments: "{{ raw_group_json | from_json }}"
+        dynamic_ad_users: "{{ active_hr_users.query_result }}"
+        dynamic_inactive_users: "{{ inactive_hr_users.query_result }}"
+        dynamic_user_group_assignments: "{{ assignments_raw | from_yaml }}"
       vars:
-        raw_group_json: >-
-          [
-            {% for row in pg_groups_result.query_result %}
-            {
-              "group": "{{ row.group_name }}",
-              "members": {
-                "add": {{ row.members | to_json }}
-              }
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-          ]
+        assignments_raw: |
+          {% for row in hr_group_mappings.query_result %}
+          - group: "{{ row.group }}"
+            members:
+              add: {{ row.members | to_json }}
+          {% endfor %}
 
-    - name: Display Extracted HR Users Data
+    - name: Display Extracted Active HR Users Data
       ansible.builtin.debug:
         var: dynamic_ad_users
+
+    - name: Display Extracted Inactive HR Users Data
+      ansible.builtin.debug:
+        var: dynamic_inactive_users
 
     - name: Display Extracted Group Mappings
       ansible.builtin.debug:

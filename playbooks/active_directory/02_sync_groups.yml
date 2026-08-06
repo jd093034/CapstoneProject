@@ -19,17 +19,19 @@
       loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
       loop_control:
         label: "{{ item.group }}"
+      when: hostvars['localhost']['dynamic_user_group_assignments'] is defined and (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
 
-    - name: Assign users to Active Directory groups
+    - name: Sync group memberships in Active Directory
       microsoft.ad.group:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
         domain_server: "{{ inventory_hostname }}"
         
         name: "{{ item.group }}"
-        scope: "global"
-        category: "security"
-        members: "{{ item.members }}"
+        members:
+          add: "{{ item.members.add }}"
+        state: present
       loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
       loop_control:
         label: "{{ item.group }}"
+      when: hostvars['localhost']['dynamic_user_group_assignments'] is defined and (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
