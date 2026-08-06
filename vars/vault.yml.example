@@ -6,3 +6,13 @@ vault_ad_admin_user: "Administrator@doman.name"
 vault_ad_admin_password: "ad_password"
 default_user_password: "default_user_password"
 ad_domain: "ad.domain"
+
+db_host, db_port, db_name, vault_db_user, vault_db_password
+
+vault_authentik_token, vault_authentik_url
+
+vault_ad_admin_user, vault_ad_admin_password, ad_domain
+
+default_user_password
+
+ansible_user, ansible_password

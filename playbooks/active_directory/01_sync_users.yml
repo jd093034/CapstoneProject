@@ -1,47 +1,42 @@
 ---
-- name: Provision Users into Active Directory from PostgreSQL
+- name: Sync Active HR Users to Active Directory
   hosts: win_dc
   gather_facts: false
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
+    - name: Load active users JSON from controller
+      ansible.builtin.set_fact:
+        active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/active_users.json') | from_json }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Normalize active users data to a list
+      ansible.builtin.set_fact:
+        active_users_list: >-
+          {{
+            active_users_raw.dynamic_ad_users
+            if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw)
+            else (active_users_raw if active_users_raw is sequence else [])
+          }}
+
     - name: Ensure active users exist in Active Directory
       microsoft.ad.user:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
         domain_server: "{{ inventory_hostname }}"
-        
         name: "{{ item.first_name }} {{ item.last_name }}"
-        firstname: "{{ item.first_name }}"
+        given_name: "{{ item.first_name }}"
         surname: "{{ item.last_name }}"
         sam_account_name: "{{ item.username }}"
-        upn: "{{ item.username }}@{{ ad_domain }}"
-        email: "{{ item.email }}"
-        company: "Apex Lab"
-        
-        attributes:
-          set:
-            department: "{{ item.department }}"
-        
-        state: "{{ item.state | default('present') }}"
+        user_principal_name: "{{ item.username }}@{{ ad_domain }}"
+        mail: "{{ item.email }}"
+        path: "OU=APEX Lab,DC=apex,DC=lab"
+        state: present
+        enabled: true
         password: "{{ default_user_password }}"
         password_never_expires: true
-      loop: "{{ hostvars['localhost']['dynamic_ad_users'] | default([]) }}"
+      loop: "{{ active_users_list }}"
       loop_control:
         label: "{{ item.username }}"
-      when: hostvars['localhost']['dynamic_ad_users'] is defined and (hostvars['localhost']['dynamic_ad_users'] | length > 0)
-
-    - name: Disable inactive users in Active Directory
-      microsoft.ad.user:
-        domain_username: "{{ vault_ad_admin_user }}"
-        domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ inventory_hostname }}"
-        
-        identity: "{{ item.username }}"
-        enabled: false
-        state: present
-      loop: "{{ hostvars['localhost']['dynamic_inactive_users'] | default([]) }}"
-      loop_control:
-        label: "{{ item.username }}"
-      when: hostvars['localhost']['dynamic_inactive_users'] is defined and (hostvars['localhost']['dynamic_inactive_users'] | length > 0)

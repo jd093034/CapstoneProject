@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HR Identity Lifecycle Pipeline Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0; padding: 30px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header { border-bottom: 2px solid #334155; padding-bottom: 15px; margin-bottom: 25px; }
+        h1 { color: #38bdf8; margin: 0 0 5px 0; }
+        .status-badge {
+            background-color: #166534; color: #4ade80;
+            padding: 6px 14px; border-radius: 20px; font-weight: bold; float: right;
+        }
+        .card { background-color: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #334155; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+        th { background-color: #0f172a; color: #94a3b8; font-size: 0.85em; text-transform: uppercase; }
+        .success { color: #4ade80; font-weight: bold; }
+        .failed { color: #f87171; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="status-badge">SUCCESS</span>
+            <h1>HR Identity Lifecycle Report</h1>
+            <p style="color: #94a3b8; margin: 0;">Generated on 2026-08-06T16:22:30Z</p>
+        </div>
+
+        <div class="card">
+            <h2>Processed Lifecycle Events</h2>
+            <ul>
+                            <li><code>[+] HIRED: Michael Gamble (mgamble) | Dept: 'Transform Proactive' | Title: 'Radio broadcast assistant'</code></li>
+                            <li><code>[+] HIRED: Ian Murray (imurray) | Dept: 'Transform Proactive' | Title: 'Probation officer'</code></li>
+                            <li><code>[+] HIRED: Tracy Rich (trich) | Dept: 'Iterate Enterprise' | Title: 'Health and safety inspector'</code></li>
+                            <li><code>[*] TRANSFERRED: trich | From: 'Iterate Enterprise' -> To: 'Benchmark Mission-critical'</code></li>
+                            <li><code>[-] TERMINATED: dortega</code></li>
+                        </ul>
+        </div>
+
+        <div class="card">
+            <h2>Downstream System Status</h2>
+            <table>
+                <tr><th>Target System</th><th>Status</th></tr>
+                <tr><td>PostgreSQL Database</td><td class="success">SYNCHRONIZED</td></tr>
+                <tr><td>Authentik SSO</td><td class="success">SYNCHRONIZED</td></tr>
+                <tr><td>Active Directory</td><td class="success">SYNCHRONIZED</td></tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

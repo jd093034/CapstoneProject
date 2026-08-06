@@ -38,14 +38,30 @@
       ansible.builtin.set_fact:
         dynamic_ad_users: "{{ active_hr_users.query_result }}"
         dynamic_inactive_users: "{{ inactive_hr_users.query_result }}"
-        dynamic_user_group_assignments: "{{ assignments_raw | from_yaml }}"
-      vars:
-        assignments_raw: |
+        dynamic_user_group_assignments: >-
+          [
           {% for row in hr_group_mappings.query_result %}
-          - group: "{{ row.group }}"
-            members:
-              add: {{ row.members | to_json }}
+            {
+              "group": "{{ row.group }}",
+              "members": { "add": {{ row.members | to_json }} }
+            }{% if not loop.last %},{% endif %}
           {% endfor %}
+          ]
+
+    - name: Save active users to temp JSON file
+      ansible.builtin.copy:
+        content: "{{ active_hr_users.query_result | to_nice_json }}"
+        dest: "/tmp/dynamic_ad_users.json"
+
+    - name: Save inactive users to temp JSON file
+      ansible.builtin.copy:
+        content: "{{ inactive_hr_users.query_result | to_nice_json }}"
+        dest: "/tmp/dynamic_inactive_users.json"
+
+    - name: Save group assignments to temp JSON file
+      ansible.builtin.copy:
+        content: "{{ dynamic_user_group_assignments | from_json | to_nice_json }}"
+        dest: "/tmp/dynamic_user_group_assignments.json"
 
     - name: Display Extracted Active HR Users Data
       ansible.builtin.debug:

@@ -2,7 +2,7 @@
 - name: End-to-End HR Lifecycle Automation & Synchronization Pipeline
   hosts: localhost
   connection: local
-  gather_facts: no
+  gather_facts: yes
 
   tasks:
     # -------------------------------------------------------------------------
@@ -21,14 +21,16 @@
     # -------------------------------------------------------------------------
     # Phase 2: Trigger Downstream Sync (site.yml)
     # -------------------------------------------------------------------------
+# Phase 2: Trigger Downstream Sync (site.yml)
+    # -------------------------------------------------------------------------
+# Phase 2: Trigger Downstream Sync (site.yml)
+    # -------------------------------------------------------------------------
     - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
-      ansible.builtin.command:
-        cmd: ansible-playbook /playbooks/site.yml
-      register: sync_result
-      ignore_errors: true
+      ansible.builtin.command: >
+        ansible-playbook -i /root/ansible/inventory/hosts.ini /root/ansible/playbooks/site.yml --vault-password-file /root/ansible/vars/.vault_pass
 
     # -------------------------------------------------------------------------
-    # Phase 3: Display Aesthetic Pipeline Recap
+    # Phase 3: Render Terminal Output & Nginx Web HTML Report
     # -------------------------------------------------------------------------
     - name: "Phase 3 | Render Executive Lifecycle Summary"
       ansible.builtin.debug:
@@ -52,3 +54,15 @@
             - Authentik SSO    : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
             - Active Directory : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
           ========================================================================
+
+    - name: "Phase 3 | Generate Timestamped HTML Report (Archive)"
+      ansible.builtin.template:
+        src: templates/report.html.j2
+        dest: "/var/www/ansible_reports/report_{{ ansible_facts['date_time']['iso8601_basic_short'] }}.html"
+        mode: '0644'
+    - name: "Phase 3 | Update Latest Execution Report Link"
+      ansible.builtin.copy:
+        src: "/var/www/ansible_reports/report_{{ ansible_facts['date_time']['iso8601_basic_short'] }}.html"
+        dest: "/var/www/ansible_reports/latest_execution_report.html"
+        remote_src: true
+        mode: '0644'

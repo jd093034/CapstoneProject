@@ -3,10 +3,10 @@
 # ==============================================================================
 
 # Phase 1: PostgreSQL Data Extraction
-- import_playbook: playbooks/postgreSQL/site_postgres.yml
+- import_playbook: postgreSQL/site_postgres.yml
 
 # Phase 2: Authentik Sync
-- import_playbook: playbooks/authentik/site_authentik.yml
+- import_playbook: authentik/site_authentik.yml
 
 # Phase 3: Active Directory Sync
-- import_playbook: playbooks/active_directory/site_ad.yml
+- import_playbook: active_directory/site_ad.yml

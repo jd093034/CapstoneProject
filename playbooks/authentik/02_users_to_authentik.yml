@@ -8,17 +8,11 @@
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
-  vars:
-    db_host: "10.2.8.106"
-    db_port: 5432
-    db_name: "hr_db"
-    authentik_url: "http://10.2.8.108:9000"
-
   tasks:
     - name: Fetch active employee records from PostgreSQL
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
-        login_port: "{{ db_port }}"
+        login_port: "{{ db_port | default(5432) }}"
         login_db: "{{ db_name }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
@@ -32,39 +26,38 @@
           WHERE status = 'ACTIVE';
       register: active_hr_users
 
-    - name: Query existing users in Authentik
+    - name: Ensure active user accounts exist in Authentik
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/users/?username={{ item.username }}"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: 200
-      loop: "{{ active_hr_users.query_result }}"
-      register: existing_users_check
-
-    - name: Create missing active accounts in Authentik
-      ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/users/"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/"
         method: POST
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
           Content-Type: "application/json"
         body_format: json
         body:
-          username: "{{ item.item.username }}"
-          name: "{{ item.item.name }}"
-          email: "{{ item.item.email }}"
+          username: "{{ item.username }}"
+          name: "{{ item.name }}"
+          email: "{{ item.email }}"
           is_active: true
           attributes:
-            department: "{{ item.item.department }}"
-        status_code: 201
-      loop: "{{ existing_users_check.results }}"
-      when: item.json.pagination.count == 0
+            department: "{{ item.department }}"
+        status_code: [201, 400]  # 201 Created, 400 Already Exists
+      loop: "{{ active_hr_users.query_result }}"
+      register: user_creation_results
+
+    - name: Fetch all current users from Authentik
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=200"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+          Accept: "application/json"
+        status_code: 200
+      register: all_authentik_users
 
     - name: Fetch Authentik group PK mappings
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/groups/"
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=200"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
@@ -74,18 +67,21 @@
 
     - name: Assign active users to their department groups
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/groups/{{ target_group_pk }}/add_user/"
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/{{ target_group_pk }}/add_user/"
         method: POST
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
           Content-Type: "application/json"
         body_format: json
         body:
-          pk: "{{ user_pk }}"
+          pk: "{{ matched_user_pk }}"
         status_code: [200, 204]
       vars:
-        matched_group: "{{ authentik_groups.json.results | selectattr('name', 'equalto', item.item.department) | first }}"
-        target_group_pk: "{{ matched_group.pk }}"
-        user_pk: "{{ item.json.results[0].pk if item.json.pagination.count > 0 else (item.json.pk | default(omit)) }}"
-      loop: "{{ existing_users_check.results }}"
-      when: item.json.pagination.count > 0
+        matched_user: "{{ all_authentik_users.json.results | selectattr('username', 'equalto', item.username) | list | first | default({}) }}"
+        matched_group: "{{ authentik_groups.json.results | selectattr('name', 'equalto', item.department) | list | first | default({}) }}"
+        matched_user_pk: "{{ matched_user.pk | default(none) }}"
+        target_group_pk: "{{ matched_group.pk | default(none) }}"
+      loop: "{{ active_hr_users.query_result }}"
+      when: 
+        - matched_user_pk is not none
+        - target_group_pk is not none
