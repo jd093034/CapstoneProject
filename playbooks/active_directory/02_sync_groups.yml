@@ -1,28 +1,36 @@
 ---
-- name: Manage Active Directory Groups and Memberships from PostgreSQL
+- name: Synchronize Active Directory Groups and Membership
   hosts: win_dc
   gather_facts: false
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
-    - name: Ensure AD groups exist in Security Groups OU and sync memberships
+    - name: Ensure Security Groups exist inside Departments OU
       microsoft.ad.group:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ inventory_hostname }}"
-        
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
         name: "{{ item.group }}"
-        scope: "global"
-        category: "security"
-        path: "OU=Security Groups,OU=APEX Lab,DC=apex,DC=lab"
-        members:
-          add: "{{ item.members.add | default([]) }}"
-          remove: "{{ item.members.remove | default([]) }}"
+        scope: global
+        category: security
+        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
         state: present
-      loop: "{{ hostvars['localhost']['dynamic_user_group_assignments'] | default([]) }}"
+      loop: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_group_assignments.json', errors='ignore') | default('[]', true) | from_json }}"
       loop_control:
         label: "{{ item.group }}"
-      when: 
-        - hostvars['localhost']['dynamic_user_group_assignments'] is defined
-        - (hostvars['localhost']['dynamic_user_group_assignments'] | length > 0)
+
+    - name: Update group member assignments in Active Directory
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        name: "{{ item.group }}"
+        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+        members:
+          add: "{{ item.members.add }}"
+        state: present
+      loop: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_group_assignments.json', errors='ignore') | default('[]', true) | from_json }}"
+      when: item.members is defined and item.members.add is defined and (item.members.add | length > 0)
+      loop_control:
+        label: "{{ item.group }}"

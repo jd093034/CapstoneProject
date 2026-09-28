@@ -1,12 +1,12 @@
 ---
 - name: End-to-End HR Lifecycle Automation & Synchronization Pipeline
   hosts: localhost
-  connection: local
-  gather_facts: yes
+  gather_facts: true
+  vars_files:
+    - vars/vault.yml
 
   tasks:
-    # -------------------------------------------------------------------------
-    # Phase 1: Generate HR Synthetic Data
+    # Phase 1: Synthetic Data Generation
     # -------------------------------------------------------------------------
     - name: "Phase 1 | Execute Synthetic HR Data Generator"
       ansible.builtin.command:
@@ -15,54 +15,25 @@
       changed_when: true
 
     - name: "Phase 1 | Extract Generated Log Lines"
-      ansible.builtin.set_fact:
-        raw_events: "{{ hr_script_output.stdout_lines | select('match', '^\\s*\\[.*\\]') | list }}"
+      ansible.builtin.debug:
+        msg: "{{ hr_script_output.stdout_lines }}"
 
-    # -------------------------------------------------------------------------
-    # Phase 2: Trigger Downstream Sync (site.yml)
-    # -------------------------------------------------------------------------
-# Phase 2: Trigger Downstream Sync (site.yml)
-    # -------------------------------------------------------------------------
-# Phase 2: Trigger Downstream Sync (site.yml)
+    # Phase 2: Orchestrate Master Synchronization Playbook
     # -------------------------------------------------------------------------
     - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
-      ansible.builtin.command: >
-        ansible-playbook -i /root/ansible/inventory/hosts.ini /root/ansible/playbooks/site.yml --vault-password-file /root/ansible/vars/.vault_pass
+      ansible.builtin.command:
+        cmd: >
+          ansible-playbook -i /root/ansible/inventory/hosts.ini
+          /root/ansible/playbooks/site.yml
+          --vault-password-file /root/ansible/vars/.vault_pass
+      register: sync_result
 
-    # -------------------------------------------------------------------------
-    # Phase 3: Render Terminal Output & Nginx Web HTML Report
+    # Phase 3: Render Terminal Output & Summary Report
     # -------------------------------------------------------------------------
     - name: "Phase 3 | Render Executive Lifecycle Summary"
       ansible.builtin.debug:
         msg: |
-          ========================================================================
-                          HR LIFECYCLE AUTOMATION REPORT                    
-          ========================================================================
-          Overall Sync Status : {{ 'SUCCESS' if (sync_result.rc == 0) else 'FAILED' }}
-          ------------------------------------------------------------------------
-          PROCESSED LIFECYCLE EVENTS:
-          {% if raw_events | length > 0 %}
-          {% for event in raw_events %}
-            {{ event }}
-          {% endfor %}
-          {% else %}
-            No new events generated in this cycle.
-          {% endif %}
-          ------------------------------------------------------------------------
-          TARGET SYNCHRONIZATION SUMMARY:
-            - PostgreSQL HR DB : UPDATED
-            - Authentik SSO    : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
-            - Active Directory : {{ 'SYNCHRONIZED' if (sync_result.rc == 0) else 'FAILED' }}
-          ========================================================================
-
-    - name: "Phase 3 | Generate Timestamped HTML Report (Archive)"
-      ansible.builtin.template:
-        src: templates/report.html.j2
-        dest: "/var/www/ansible_reports/report_{{ ansible_facts['date_time']['iso8601_basic_short'] }}.html"
-        mode: '0644'
-    - name: "Phase 3 | Update Latest Execution Report Link"
-      ansible.builtin.copy:
-        src: "/var/www/ansible_reports/report_{{ ansible_facts['date_time']['iso8601_basic_short'] }}.html"
-        dest: "/var/www/ansible_reports/latest_execution_report.html"
-        remote_src: true
-        mode: '0644'
+          =====================================================
+                    HR LIFECYCLE SYNC EXECUTION RESULTS         
+          =====================================================
+          {{ sync_result.stdout }}

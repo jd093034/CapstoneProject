@@ -1,0 +1,143 @@
+---
+# =============================================================================
+# Play 1: PostgreSQL & Authentik Cleanup (Runs on Host)
+# =============================================================================
+- name: Environment Reset - Wipe Database and Authentik
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. PostgreSQL Cleanup (Bulk Truncate)
+    # -------------------------------------------------------------------------
+    - name: Purge PostgreSQL HR database tables
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port | default(5432) }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          DO $$ 
+          DECLARE 
+              stmt text;
+          BEGIN 
+              SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(tablename), ', ') || ' CASCADE;'
+              INTO stmt
+              FROM pg_tables 
+              WHERE schemaname = 'public';
+              
+              IF stmt IS NOT NULL THEN
+                  EXECUTE stmt;
+              END IF;
+          END $$;
+
+    # -------------------------------------------------------------------------
+    # 2. Authentik Cleanup (Asynchronous Concurrent HTTP Requests)
+    # -------------------------------------------------------------------------
+    - name: Fetch all non-system users from Authentik
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: 200
+      register: authentik_users
+
+    - name: Delete non-system users from Authentik (Async Parallel)
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.pk }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: [204, 404]
+      loop: "{{ authentik_users.json.results }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: 
+        - item.username not in ['akadmin', 'anonymous']
+        - not item.username.startswith('ak-outpost-')
+      async: 30
+      poll: 0
+      register: async_user_deletes
+
+    - name: Fetch custom groups from Authentik
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=1000"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: 200
+      register: authentik_groups
+
+    - name: Delete custom department groups from Authentik (Async Parallel)
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/{{ item.pk }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: [204, 404]
+      loop: "{{ authentik_groups.json.results }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: 
+        - item.is_superuser == false 
+        - item.name not in ['authentik Admins']
+      async: 30
+      poll: 0
+      register: async_group_deletes
+
+    - name: Wait for Authentik async user deletions to complete
+      ansible.builtin.async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ async_user_deletes.results | default([]) }}"
+      when: item.ansible_job_id is defined
+      register: async_user_results
+      until: async_user_results.finished
+      retries: 30
+      delay: 1
+
+    - name: Wait for Authentik async group deletions to complete
+      ansible.builtin.async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ async_group_deletes.results | default([]) }}"
+      when: item.ansible_job_id is defined
+      register: async_group_results
+      until: async_group_results.finished
+      retries: 30
+      delay: 1
+
+# =============================================================================
+# Play 2: Active Directory Cleanup (Single-Session Bulk PowerShell)
+# =============================================================================
+- name: Environment Reset - Wipe Active Directory
+  hosts: win_dc
+  gather_facts: false
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 3. Active Directory Bulk Deletion via WinRM Scripting
+    # -------------------------------------------------------------------------
+    - name: Bulk remove non-system users from AD (Single WinRM Session)
+      ansible.windows.win_powershell:
+        script: |
+          $Excluding = @('Administrator', 'Guest', 'krbtgt', 'Domain Admins', 'Domain Users')
+          Get-ADUser -Filter * -SearchBase "CN=Users,DC=apex,DC=lab" | 
+            Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
+            Remove-ADUser -Confirm:$false
+
+    - name: Bulk remove department security groups from AD (Single WinRM Session)
+      ansible.windows.win_powershell:
+        script: |
+          $Excluding = @('Domain Admins', 'Domain Users', 'Domain Guests', 'Enterprise Admins', 'Schema Admins')
+          Get-ADGroup -Filter * -SearchBase "OU=Departments,OU=APEX Lab,DC=apex,DC=lab" -ErrorAction SilentlyContinue | 
+            Where-Object { $Excluding -notcontains $_.Name } | 
+            Remove-ADGroup -Confirm:$false
+
+    - name: Reset confirmation message
+      ansible.builtin.debug:
+        msg: "Environment reset complete. PostgreSQL, Authentik, AD users, and AD department groups have been purged."

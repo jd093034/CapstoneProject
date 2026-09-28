@@ -11,10 +11,14 @@
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
         validate_certs: no
-      loop: "{{ dynamic_inactive_users | default([]) }}"
+      loop: "{{ dynamic_inactive_users if (dynamic_inactive_users is sequence and dynamic_inactive_users is not mapping) else [] }}"
       register: authentik_inactive_check
       check_mode: no
-      when: dynamic_inactive_users is defined and dynamic_inactive_users | length > 0
+      when: 
+        - dynamic_inactive_users is defined
+        - dynamic_inactive_users is sequence
+        - dynamic_inactive_users is not mapping
+        - dynamic_inactive_users | length > 0
 
     - name: Deactivate accounts marked inactive in HR DB
       ansible.builtin.uri:

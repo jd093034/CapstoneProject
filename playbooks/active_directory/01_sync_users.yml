@@ -21,18 +21,64 @@
             else (active_users_raw if active_users_raw is sequence else [])
           }}
 
-    - name: Ensure active users exist in Active Directory
+    - name: Extract unique department names
+      ansible.builtin.set_fact:
+        unique_departments: "{{ active_users_list | map(attribute='department') | reject('equalto', None) | unique | list }}"
+
+    - name: Ensure Security Groups exist directly inside Departments OU
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        name: "{{ item }}"
+        sam_account_name: "{{ item | regex_replace('[\\\\/:*?\"<>|]', '') }}"
+        scope: global
+        category: security
+        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+        state: present
+      loop: "{{ unique_departments }}"
+      when: unique_departments | length > 0
+
+    - name: Check existing user accounts in Active Directory
+      microsoft.ad.object_info:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        filter: "SamAccountName -eq '{{ item.username }}'"
+      loop: "{{ active_users_list }}"
+      register: existing_ad_users
+      loop_control:
+        label: "{{ item.username }}"
+
+    - name: Move existing users to CN=Users if path differs
+      microsoft.ad.object:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        identity: "{{ item.item.username }}"
+        type: user
+        path: "CN=Users,DC=apex,DC=lab"
+        state: present
+      loop: "{{ existing_ad_users.results }}"
+      when:
+        - item.objects is defined
+        - item.objects | length > 0
+        - not item.objects[0].DistinguishedName.endswith('CN=Users,DC=apex,DC=lab')
+      loop_control:
+        label: "{{ item.item.username }}"
+
+    - name: Ensure active users exist in CN=Users
       microsoft.ad.user:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ ad_hostname }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
         name: "{{ item.first_name }} {{ item.last_name }}"
-        given_name: "{{ item.first_name }}"
+        firstname: "{{ item.first_name }}"
         surname: "{{ item.last_name }}"
+        upn: "{{ item.username }}@{{ ad_domain | default('apex.lab') }}"
         sam_account_name: "{{ item.username }}"
-        user_principal_name: "{{ item.username }}@{{ ad_domain }}"
-        mail: "{{ item.email }}"
-        path: "OU=APEX Lab,DC=apex,DC=lab"
+        email: "{{ item.email }}"
+        path: "CN=Users,DC=apex,DC=lab"
         state: present
         enabled: true
         password: "{{ default_user_password }}"
@@ -40,3 +86,22 @@
       loop: "{{ active_users_list }}"
       loop_control:
         label: "{{ item.username }}"
+
+    - name: Add users to their respective Security Groups
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        identity: "{{ item.department }}"
+        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+        scope: global
+        category: security
+        members:
+          add: "{{ item.username }}"
+        state: present
+      loop: "{{ active_users_list }}"
+      when:
+        - item.department is defined
+        - item.department | length > 0
+      loop_control:
+        label: "{{ item.username }} -> {{ item.department }}"
