@@ -27,6 +27,7 @@
           /root/ansible/playbooks/site.yml
           --vault-password-file /root/ansible/vars/.vault_pass
       register: sync_result
+      ignore_errors: true
 
     # Phase 3: Render Terminal Output & Summary Report
     # -------------------------------------------------------------------------
@@ -37,3 +38,61 @@
                     HR LIFECYCLE SYNC EXECUTION RESULTS         
           =====================================================
           {{ sync_result.stdout }}
+
+    # Phase 4: Generate HTML Status Report for Web Dashboard
+    # -------------------------------------------------------------------------
+    - name: "Phase 4 | Ensure reports directory exists locally"
+      ansible.builtin.file:
+        path: "/root/ansible/reports"
+        state: directory
+        mode: '0755'
+
+    - name: "Phase 4 | Load active users JSON for report rendering"
+      ansible.builtin.set_fact:
+        active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_users.json', errors='ignore') | default('[]', true) | from_json }}"
+
+    - name: "Phase 4 | Extract raw log events and dynamically compute execution status"
+      ansible.builtin.set_fact:
+        raw_events: "{{ hr_script_output.stdout_lines | default([]) }}"
+        active_users_list: >-
+          {{
+            active_users_raw.dynamic_ad_users
+            if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw)
+            else (active_users_raw if active_users_raw is sequence else [])
+          }}
+        # Determine statuses dynamically based on task execution output
+        overall_status: "{{ 'SUCCESS' if sync_result.rc == 0 else 'FAILED' }}"
+        postgres_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
+        authentik_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
+        ad_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
+
+    - name: "Phase 4 | Render HTML Report locally"
+      ansible.builtin.template:
+        src: "/root/ansible/templates/report.html.j2"
+        dest: "/root/ansible/reports/index.html"
+        mode: '0644'
+      vars:
+        sync_result: "{{ sync_result }}"
+        raw_events: "{{ raw_events }}"
+        active_users_list: "{{ active_users_list }}"
+        overall_status: "{{ overall_status }}"
+        postgres_status: "{{ postgres_status }}"
+        authentik_status: "{{ authentik_status }}"
+        ad_status: "{{ ad_status }}"
+
+    - name: "Phase 4 | Publish HTML Report to Nginx web root on 10.2.8.68"
+      ansible.builtin.copy:
+        src: "/root/ansible/reports/index.html"
+        dest: "/var/www/html/index.html"
+        mode: '0644'
+      delegate_to: 10.2.8.68
+      vars:
+        ansible_connection: ssh
+        ansible_port: 22
+        ansible_user: "{{ vault_ssh_user }}"
+        ansible_password: "{{ vault_ssh_password }}"
+
+    - name: "Phase 4 | Fail playbook if synchronization failed"
+      ansible.builtin.fail:
+        msg: "Master synchronization playbook failed during execution. Check logs above."
+      when: sync_result.rc != 0

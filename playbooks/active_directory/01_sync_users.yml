@@ -87,7 +87,32 @@
       loop_control:
         label: "{{ item.username }}"
 
-    - name: Add users to their respective Security Groups
+    - name: Fetch existing department security groups from AD
+      microsoft.ad.object_info:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        search_base: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+        filter: "ObjectClass -eq 'group'"
+      register: ad_dept_groups
+
+    - name: Remove user from non-matching department groups (Transfer Cleanup)
+      microsoft.ad.group:
+        domain_username: "{{ vault_ad_admin_user }}"
+        domain_password: "{{ vault_ad_admin_password }}"
+        domain_server: "{{ ad_hostname | default(ansible_host) }}"
+        identity: "{{ item.0.Name }}"
+        members:
+          remove: "{{ item.1.username }}"
+        state: present
+      loop: "{{ ad_dept_groups.objects | default([]) | product(active_users_list) | list }}"
+      when:
+        - item.0.Name != item.1.department
+      loop_control:
+        label: "Remove {{ item.1.username }} from {{ item.0.Name }}"
+      ignore_errors: true
+
+    - name: Add users to their current department Security Group
       microsoft.ad.group:
         domain_username: "{{ vault_ad_admin_user }}"
         domain_password: "{{ vault_ad_admin_password }}"

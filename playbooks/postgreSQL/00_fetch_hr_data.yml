@@ -36,11 +36,11 @@
 
     - name: Map PostgreSQL rows into dynamic pipeline facts
       ansible.builtin.set_fact:
-        dynamic_ad_users: "{{ active_hr_users.query_result }}"
-        dynamic_inactive_users: "{{ inactive_hr_users.query_result }}"
+        dynamic_ad_users: "{{ active_hr_users.query_result | default([]) }}"
+        dynamic_inactive_users: "{{ inactive_hr_users.query_result | default([]) }}"
         dynamic_user_group_assignments: >-
           [
-          {% for row in hr_group_mappings.query_result %}
+          {% for row in hr_group_mappings.query_result | default([]) %}
             {
               "group": "{{ row.group }}",
               "members": { "add": {{ row.members | to_json }} }
@@ -50,12 +50,12 @@
 
     - name: Save active users to temp JSON file
       ansible.builtin.copy:
-        content: "{{ active_hr_users.query_result | to_nice_json }}"
+        content: "{{ (active_hr_users.query_result | default([])) | to_nice_json }}"
         dest: "/tmp/dynamic_ad_users.json"
 
     - name: Save inactive users to temp JSON file
       ansible.builtin.copy:
-        content: "{{ inactive_hr_users.query_result | to_nice_json }}"
+        content: "{{ (inactive_hr_users.query_result | default([])) | to_nice_json }}"
         dest: "/tmp/dynamic_inactive_users.json"
 
     - name: Save group assignments to temp JSON file

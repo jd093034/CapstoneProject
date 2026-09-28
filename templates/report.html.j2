@@ -96,7 +96,6 @@
             letter-spacing: 0.3px;
         }
 
-        /* Clean terminal log block without wrapping bullet points */
         .events-container {
             background-color: #0b1120;
             border: 1px solid var(--border-color);
@@ -125,7 +124,6 @@
             border-bottom: none;
         }
 
-        /* Event Tag Highlights */
         .tag-hired {
             color: var(--accent-green);
             font-weight: bold;
@@ -189,8 +187,9 @@
                 Generated on {{ ansible_facts['date_time']['date'] }} at {{ "%02d" % hour_12 }}:{{ ansible_facts['date_time']['minute'] }}:{{ ansible_facts['date_time']['second'] }} {{ am_pm }} {{ ansible_facts['date_time']['tz'] }}
             </div>
         </div>
-        <div class="status-badge {% if sync_result.rc != 0 %}failed{% endif %}">
-            {{ 'SUCCESS' if sync_result.rc == 0 else 'FAILED' }}
+        {% set main_status = overall_status | default('SUCCESS' if sync_result.rc | default(0) == 0 else 'FAILED') %}
+        <div class="status-badge {% if main_status == 'FAILED' %}failed{% endif %}">
+            {{ main_status }}
         </div>
     </div>
 
@@ -229,27 +228,30 @@
                 </tr>
             </thead>
             <tbody>
+                {% set pg_stat = postgres_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
                 <tr>
                     <td>PostgreSQL Database</td>
                     <td>
-                        <span class="status-badge {% if sync_result.rc != 0 %}failed{% endif %}">
-                            {{ 'SYNCHRONIZED' if sync_result.rc == 0 else 'FAILED' }}
+                        <span class="status-badge {% if pg_stat == 'FAILED' %}failed{% endif %}">
+                            {{ pg_stat }}
                         </span>
                     </td>
                 </tr>
+                {% set auth_stat = authentik_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
                 <tr>
                     <td>Authentik SSO</td>
                     <td>
-                        <span class="status-badge {% if sync_result.rc != 0 %}failed{% endif %}">
-                            {{ 'SYNCHRONIZED' if sync_result.rc == 0 else 'FAILED' }}
+                        <span class="status-badge {% if auth_stat == 'FAILED' %}failed{% endif %}">
+                            {{ auth_stat }}
                         </span>
                     </td>
                 </tr>
+                {% set ad_stat = ad_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
                 <tr>
                     <td>Active Directory</td>
                     <td>
-                        <span class="status-badge {% if sync_result.rc != 0 %}failed{% endif %}">
-                            {{ 'SYNCHRONIZED' if sync_result.rc == 0 else 'FAILED' }}
+                        <span class="status-badge {% if ad_stat == 'FAILED' %}failed{% endif %}">
+                            {{ ad_stat }}
                         </span>
                     </td>
                 </tr>
