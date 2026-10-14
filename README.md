@@ -4,7 +4,6 @@ TODO:
 
 - Email about Conflicts
 - Upload a CSV, parse the CSV with SQL and feed it to AD
-- Delete titles from generated data, more variety in departments, and maybe more realism of said departments
   
 # Commands
 
