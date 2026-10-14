@@ -4,6 +4,7 @@ TODO:
 
 - Email about Conflicts
 - Upload a CSV, parse the CSV with SQL and feed it to AD
+- Change the Generate_HR Data PY so its not just terminating the same employees it just hired/generated
 
 # Commands
 
