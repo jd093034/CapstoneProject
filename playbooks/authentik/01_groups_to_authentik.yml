@@ -8,32 +8,57 @@
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
-  vars:
-    db_host: "10.2.8.106"
-    db_port: 5432
-    db_name: "hr_db"
-    authentik_url: "http://10.2.8.108:9000"
-
   tasks:
     - name: Fetch unique department list from PostgreSQL
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
-        login_port: "{{ db_port }}"
+        login_port: "{{ db_port | default(5432) }}"
         login_db: "{{ db_name }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
-        query: "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL;"
+        query: "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND status = 'ACTIVE';"
       register: hr_departments
 
-    - name: Ensure department groups exist in Authentik
+    - name: Normalize department query results to a flat list
+      ansible.builtin.set_fact:
+        dept_list: "{{ hr_departments.query_result | flatten | map(attribute='department') | unique | list }}"
+
+    - name: Fetch existing groups from Authentik
       ansible.builtin.uri:
-        url: "{{ authentik_url }}/api/v3/core/groups/"
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=1000"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+          Accept: "application/json"
+        status_code: [200]
+        validate_certs: false
+        timeout: 15
+      register: existing_authentik_groups
+      ignore_errors: true
+
+    - name: Extract existing group names
+      ansible.builtin.set_fact:
+        existing_group_names: "{{ (existing_authentik_groups.json | default({})).results | default([]) | map(attribute='name') | list }}"
+
+    - name: Filter departments that do not exist in Authentik
+      ansible.builtin.set_fact:
+        missing_departments: "{{ dept_list | reject('in', existing_group_names) | list }}"
+
+    - name: Ensure missing department groups exist in Authentik
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/"
         method: POST
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
           Content-Type: "application/json"
         body_format: json
         body:
-          name: "{{ item.department }}"
-        status_code: [201, 400]
-      loop: "{{ hr_departments.query_result }}"
+          name: "{{ item }}"
+          is_superuser: false
+        status_code: [200, 201, 400, 409]
+        validate_certs: false
+        timeout: 15
+      loop: "{{ missing_departments }}"
+      when: missing_departments | length > 0
+      loop_control:
+        label: "{{ item }}"
