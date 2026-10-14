@@ -4,8 +4,8 @@ TODO:
 
 - Email about Conflicts
 - Upload a CSV, parse the CSV with SQL and feed it to AD
-- Change the Generate_HR Data PY so its not just terminating the same employees it just hired/generated
-
+- Delete titles from generated data, more variety in departments, and maybe more realism of said departments
+  
 # Commands
 
 ## Check users on AD
