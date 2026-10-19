@@ -38,7 +38,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
         }
@@ -197,6 +197,55 @@
             font-size: 14px;
         }
 
+        /* Pagination Styles */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .page-btn {
+            background-color: var(--table-header);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .page-btn.active {
+            background-color: var(--accent-blue);
+            color: #0f172a;
+            border-color: var(--accent-blue);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .footer {
             text-align: center;
             font-size: 12px;
@@ -204,7 +253,7 @@
             padding-top: 20px;
             border-top: 1px solid rgba(51, 65, 85, 0.4);
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
         }
     </style>
 </head>
@@ -236,10 +285,10 @@
     <div class="card">
         <h2>Processed Lifecycle Stream</h2>
         <div class="events-container">
-            <ul class="events-list">
-            {% if raw_events | length > 0 %}
+            <ul class="events-list" id="eventsList">
+            {% if raw_events | default([]) | length > 0 %}
                 {% for event in raw_events %}
-                <li>
+                <li class="event-item">
                     {% if 'HIRED' in event %}
                         <span class="tag-hired">[+]</span> {{ event | replace('[+]', '') }}
                     {% elif 'TRANSFERRED' in event %}
@@ -256,6 +305,13 @@
             {% endif %}
             </ul>
         </div>
+
+        {% if raw_events | default([]) | length > 0 %}
+        <div class="pagination-wrapper">
+            <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
+            <div class="pagination-controls" id="paginationControls"></div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="card">
@@ -305,6 +361,75 @@
 <div class="footer">
     Automated HR Identity Management Pipeline • Nginx Service Active
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const rowsPerPage = 10;
+    const eventsList = document.getElementById("eventsList");
+    const eventItems = Array.from(eventsList.querySelectorAll("li.event-item"));
+    const totalRows = eventItems.length;
+
+    if (totalRows === 0) return;
+
+    let currentPage = 1;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+
+    function displayPage(page) {
+        currentPage = page;
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        eventItems.forEach((item, index) => {
+            if (index >= start && index < end) {
+                item.style.display = "";
+            } else {
+                item.style.display = "none";
+            }
+        });
+
+        const currentEnd = Math.min(end, totalRows);
+        document.getElementById("paginationInfo").innerText = 
+            `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+
+        renderControls();
+    }
+
+    function renderControls() {
+        const controlsContainer = document.getElementById("paginationControls");
+        controlsContainer.innerHTML = "";
+
+        const prevBtn = document.createElement("button");
+        prevBtn.className = "page-btn";
+        prevBtn.innerText = "‹ Prev";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => displayPage(currentPage - 1);
+        controlsContainer.appendChild(prevBtn);
+
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement("button");
+            pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+            pageBtn.innerText = i;
+            pageBtn.onclick = () => displayPage(i);
+            controlsContainer.appendChild(pageBtn);
+        }
+
+        const nextBtn = document.createElement("button");
+        nextBtn.className = "page-btn";
+        nextBtn.innerText = "Next ›";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => displayPage(currentPage + 1);
+        controlsContainer.appendChild(nextBtn);
+    }
+
+    displayPage(1);
+});
+</script>
 
 </body>
 </html>

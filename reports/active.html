@@ -166,6 +166,55 @@
             white-space: nowrap;
         }
 
+        /* Pagination Styles */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .page-btn {
+            background-color: var(--table-header);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .page-btn.active {
+            background-color: var(--accent-blue);
+            color: #0f172a;
+            border-color: var(--accent-blue);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .footer {
             text-align: center;
             font-size: 12px;
@@ -184,11 +233,11 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-10-19 at 02:35:45 PM EDT
+                                                                Generated on 2026-10-19 at 03:06:55 PM EDT
             </div>
         </div>
         <div class="status-badge">
-            ACTIVE IDENTITIES (0)
+            ACTIVE IDENTITIES (175)
         </div>
     </div>
 
@@ -201,7 +250,7 @@
 
     <div class="card">
         <h2>Active Managed Employees</h2>
-        <table>
+        <table id="activeTable">
             <thead>
                 <tr>
                     <th>Username</th>
@@ -212,19 +261,1668 @@
                 </tr>
             </thead>
             <tbody>
-                                    <tr>
-                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">
-                            No active employees retrieved from PostgreSQL HR DB.
-                        </td>
+                                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rwilson</code></td>
+                        <td class="td-nowrap">
+                                                            Ryan Wilson
+                                                    </td>
+                        <td>rwilson@apex.lab</td>
+                        <td>Technical Account Management</td>
+                        <td><span class="badge-ou">OU=Technical Account Management,OU=Departments</span></td>
                     </tr>
-                            </tbody>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tnelson</code></td>
+                        <td class="td-nowrap">
+                                                            Tiffany Nelson
+                                                    </td>
+                        <td>tnelson@apex.lab</td>
+                        <td>Workplace Diversity</td>
+                        <td><span class="badge-ou">OU=Workplace Diversity,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rcopeland</code></td>
+                        <td class="td-nowrap">
+                                                            Roger Copeland
+                                                    </td>
+                        <td>rcopeland@apex.lab</td>
+                        <td>Vulnerability Management</td>
+                        <td><span class="badge-ou">OU=Vulnerability Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jgordon</code></td>
+                        <td class="td-nowrap">
+                                                            Joseph Gordon
+                                                    </td>
+                        <td>jgordon@apex.lab</td>
+                        <td>Digital Transformation</td>
+                        <td><span class="badge-ou">OU=Digital Transformation,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dduran</code></td>
+                        <td class="td-nowrap">
+                                                            David Duran
+                                                    </td>
+                        <td>dduran@apex.lab</td>
+                        <td>Unified Communications</td>
+                        <td><span class="badge-ou">OU=Unified Communications,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mthompson</code></td>
+                        <td class="td-nowrap">
+                                                            Megan Thompson
+                                                    </td>
+                        <td>mthompson@apex.lab</td>
+                        <td>Regulatory Affairs</td>
+                        <td><span class="badge-ou">OU=Regulatory Affairs,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>aboyer</code></td>
+                        <td class="td-nowrap">
+                                                            Andrew Boyer
+                                                    </td>
+                        <td>aboyer@apex.lab</td>
+                        <td>Client Onboarding</td>
+                        <td><span class="badge-ou">OU=Client Onboarding,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dmiller</code></td>
+                        <td class="td-nowrap">
+                                                            Deanna Miller
+                                                    </td>
+                        <td>dmiller@apex.lab</td>
+                        <td>Firmware Engineering</td>
+                        <td><span class="badge-ou">OU=Firmware Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>swolfe</code></td>
+                        <td class="td-nowrap">
+                                                            Sara Wolfe
+                                                    </td>
+                        <td>swolfe@apex.lab</td>
+                        <td>Digital Marketing</td>
+                        <td><span class="badge-ou">OU=Digital Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pwood</code></td>
+                        <td class="td-nowrap">
+                                                            Patricia Wood
+                                                    </td>
+                        <td>pwood@apex.lab</td>
+                        <td>Security Awareness Training</td>
+                        <td><span class="badge-ou">OU=Security Awareness Training,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tpowers</code></td>
+                        <td class="td-nowrap">
+                                                            Tammy Powers
+                                                    </td>
+                        <td>tpowers@apex.lab</td>
+                        <td>Sales Operations</td>
+                        <td><span class="badge-ou">OU=Sales Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>akelly</code></td>
+                        <td class="td-nowrap">
+                                                            Amanda Kelly
+                                                    </td>
+                        <td>akelly@apex.lab</td>
+                        <td>Information Technology</td>
+                        <td><span class="badge-ou">OU=Information Technology,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>smiller</code></td>
+                        <td class="td-nowrap">
+                                                            Sydney Miller
+                                                    </td>
+                        <td>smiller@apex.lab</td>
+                        <td>Cryptography and PKI</td>
+                        <td><span class="badge-ou">OU=Cryptography and PKI,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kflores</code></td>
+                        <td class="td-nowrap">
+                                                            Kristy Flores
+                                                    </td>
+                        <td>kflores@apex.lab</td>
+                        <td>Growth Marketing</td>
+                        <td><span class="badge-ou">OU=Growth Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>wsmith</code></td>
+                        <td class="td-nowrap">
+                                                            William Smith
+                                                    </td>
+                        <td>wsmith@apex.lab</td>
+                        <td>Corporate Governance</td>
+                        <td><span class="badge-ou">OU=Corporate Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bwilliams</code></td>
+                        <td class="td-nowrap">
+                                                            Brian Williams
+                                                    </td>
+                        <td>bwilliams@apex.lab</td>
+                        <td>Business Intelligence</td>
+                        <td><span class="badge-ou">OU=Business Intelligence,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>nfisher</code></td>
+                        <td class="td-nowrap">
+                                                            Nancy Fisher
+                                                    </td>
+                        <td>nfisher@apex.lab</td>
+                        <td>Content Marketing</td>
+                        <td><span class="badge-ou">OU=Content Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kwatson</code></td>
+                        <td class="td-nowrap">
+                                                            Kyle Watson
+                                                    </td>
+                        <td>kwatson@apex.lab</td>
+                        <td>Paralegal Services</td>
+                        <td><span class="badge-ou">OU=Paralegal Services,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>abaker</code></td>
+                        <td class="td-nowrap">
+                                                            Angela Baker
+                                                    </td>
+                        <td>abaker@apex.lab</td>
+                        <td>Privacy and Data Protection</td>
+                        <td><span class="badge-ou">OU=Privacy and Data Protection,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jodom</code></td>
+                        <td class="td-nowrap">
+                                                            Joseph Odom
+                                                    </td>
+                        <td>jodom@apex.lab</td>
+                        <td>IT Change Management</td>
+                        <td><span class="badge-ou">OU=IT Change Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>thill</code></td>
+                        <td class="td-nowrap">
+                                                            Tamara Hill
+                                                    </td>
+                        <td>thill@apex.lab</td>
+                        <td>Active Directory Engineering</td>
+                        <td><span class="badge-ou">OU=Active Directory Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jcarroll</code></td>
+                        <td class="td-nowrap">
+                                                            John Carroll
+                                                    </td>
+                        <td>jcarroll@apex.lab</td>
+                        <td>Account Management</td>
+                        <td><span class="badge-ou">OU=Account Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jbuckley</code></td>
+                        <td class="td-nowrap">
+                                                            Jonathon Buckley
+                                                    </td>
+                        <td>jbuckley@apex.lab</td>
+                        <td>Sales Operations</td>
+                        <td><span class="badge-ou">OU=Sales Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mwolfe</code></td>
+                        <td class="td-nowrap">
+                                                            Meredith Wolfe
+                                                    </td>
+                        <td>mwolfe@apex.lab</td>
+                        <td>International Tax</td>
+                        <td><span class="badge-ou">OU=International Tax,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>lrasmussen</code></td>
+                        <td class="td-nowrap">
+                                                            Lauren Rasmussen
+                                                    </td>
+                        <td>lrasmussen@apex.lab</td>
+                        <td>Systems Architecture</td>
+                        <td><span class="badge-ou">OU=Systems Architecture,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>msantos</code></td>
+                        <td class="td-nowrap">
+                                                            Michael Santos
+                                                    </td>
+                        <td>msantos@apex.lab</td>
+                        <td>Growth Marketing</td>
+                        <td><span class="badge-ou">OU=Growth Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tgilbert</code></td>
+                        <td class="td-nowrap">
+                                                            Terri Gilbert
+                                                    </td>
+                        <td>tgilbert@apex.lab</td>
+                        <td>Commercial Sales</td>
+                        <td><span class="badge-ou">OU=Commercial Sales,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cwest</code></td>
+                        <td class="td-nowrap">
+                                                            Courtney West
+                                                    </td>
+                        <td>cwest@apex.lab</td>
+                        <td>Corporate Governance</td>
+                        <td><span class="badge-ou">OU=Corporate Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pnichols</code></td>
+                        <td class="td-nowrap">
+                                                            Patrick Nichols
+                                                    </td>
+                        <td>pnichols@apex.lab</td>
+                        <td>Product Management</td>
+                        <td><span class="badge-ou">OU=Product Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bpaul</code></td>
+                        <td class="td-nowrap">
+                                                            Brianna Paul
+                                                    </td>
+                        <td>bpaul@apex.lab</td>
+                        <td>Cloud Infrastructure</td>
+                        <td><span class="badge-ou">OU=Cloud Infrastructure,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>nmcmahon</code></td>
+                        <td class="td-nowrap">
+                                                            Natasha Mcmahon
+                                                    </td>
+                        <td>nmcmahon@apex.lab</td>
+                        <td>Sales Engineering</td>
+                        <td><span class="badge-ou">OU=Sales Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dmathis</code></td>
+                        <td class="td-nowrap">
+                                                            Dustin Mathis
+                                                    </td>
+                        <td>dmathis@apex.lab</td>
+                        <td>Total Rewards</td>
+                        <td><span class="badge-ou">OU=Total Rewards,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cstewart</code></td>
+                        <td class="td-nowrap">
+                                                            Charles Stewart
+                                                    </td>
+                        <td>cstewart@apex.lab</td>
+                        <td>Threat Hunting</td>
+                        <td><span class="badge-ou">OU=Threat Hunting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cjones</code></td>
+                        <td class="td-nowrap">
+                                                            Christy Jones
+                                                    </td>
+                        <td>cjones@apex.lab</td>
+                        <td>Talent Management</td>
+                        <td><span class="badge-ou">OU=Talent Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rblanchard</code></td>
+                        <td class="td-nowrap">
+                                                            Rick Blanchard
+                                                    </td>
+                        <td>rblanchard@apex.lab</td>
+                        <td>Employment and Labor Law</td>
+                        <td><span class="badge-ou">OU=Employment and Labor Law,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>asosa</code></td>
+                        <td class="td-nowrap">
+                                                            Amanda Sosa
+                                                    </td>
+                        <td>asosa@apex.lab</td>
+                        <td>Blue Team Operations</td>
+                        <td><span class="badge-ou">OU=Blue Team Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>avalenzuela</code></td>
+                        <td class="td-nowrap">
+                                                            Anthony Valenzuela
+                                                    </td>
+                        <td>avalenzuela@apex.lab</td>
+                        <td>Strategic Initiatives</td>
+                        <td><span class="badge-ou">OU=Strategic Initiatives,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bclark</code></td>
+                        <td class="td-nowrap">
+                                                            Bryan Clark
+                                                    </td>
+                        <td>bclark@apex.lab</td>
+                        <td>International Trade Compliance</td>
+                        <td><span class="badge-ou">OU=International Trade Compliance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>nmoore</code></td>
+                        <td class="td-nowrap">
+                                                            Nancy Moore
+                                                    </td>
+                        <td>nmoore@apex.lab</td>
+                        <td>Network Security Engineering</td>
+                        <td><span class="badge-ou">OU=Network Security Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bknapp</code></td>
+                        <td class="td-nowrap">
+                                                            Beth Knapp
+                                                    </td>
+                        <td>bknapp@apex.lab</td>
+                        <td>Mainframe Systems</td>
+                        <td><span class="badge-ou">OU=Mainframe Systems,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>ehamilton</code></td>
+                        <td class="td-nowrap">
+                                                            Edward Hamilton
+                                                    </td>
+                        <td>ehamilton@apex.lab</td>
+                        <td>Linux Systems Engineering</td>
+                        <td><span class="badge-ou">OU=Linux Systems Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>abrooks</code></td>
+                        <td class="td-nowrap">
+                                                            Adam Brooks
+                                                    </td>
+                        <td>abrooks@apex.lab</td>
+                        <td>Cryptography and PKI</td>
+                        <td><span class="badge-ou">OU=Cryptography and PKI,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>eelliott</code></td>
+                        <td class="td-nowrap">
+                                                            Edward Elliott
+                                                    </td>
+                        <td>eelliott@apex.lab</td>
+                        <td>Environmental Health Safety</td>
+                        <td><span class="badge-ou">OU=Environmental Health Safety,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>aclements</code></td>
+                        <td class="td-nowrap">
+                                                            Amanda Clements
+                                                    </td>
+                        <td>aclements@apex.lab</td>
+                        <td>Legal Operations</td>
+                        <td><span class="badge-ou">OU=Legal Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kmarsh</code></td>
+                        <td class="td-nowrap">
+                                                            Kayla Marsh
+                                                    </td>
+                        <td>kmarsh@apex.lab</td>
+                        <td>Network Architecture</td>
+                        <td><span class="badge-ou">OU=Network Architecture,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sbell</code></td>
+                        <td class="td-nowrap">
+                                                            Stephanie Bell
+                                                    </td>
+                        <td>sbell@apex.lab</td>
+                        <td>Strategic Partnerships</td>
+                        <td><span class="badge-ou">OU=Strategic Partnerships,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>shayes</code></td>
+                        <td class="td-nowrap">
+                                                            Shannon Hayes
+                                                    </td>
+                        <td>shayes@apex.lab</td>
+                        <td>Billing Operations</td>
+                        <td><span class="badge-ou">OU=Billing Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jfoster</code></td>
+                        <td class="td-nowrap">
+                                                            Joel Foster
+                                                    </td>
+                        <td>jfoster@apex.lab</td>
+                        <td>Field Marketing</td>
+                        <td><span class="badge-ou">OU=Field Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jcross</code></td>
+                        <td class="td-nowrap">
+                                                            Jennifer Cross
+                                                    </td>
+                        <td>jcross@apex.lab</td>
+                        <td>Public Relations</td>
+                        <td><span class="badge-ou">OU=Public Relations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>shill</code></td>
+                        <td class="td-nowrap">
+                                                            Stacey Hill
+                                                    </td>
+                        <td>shill@apex.lab</td>
+                        <td>Release Management</td>
+                        <td><span class="badge-ou">OU=Release Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mdiaz</code></td>
+                        <td class="td-nowrap">
+                                                            Michael Diaz
+                                                    </td>
+                        <td>mdiaz@apex.lab</td>
+                        <td>Digital Forensics</td>
+                        <td><span class="badge-ou">OU=Digital Forensics,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pward</code></td>
+                        <td class="td-nowrap">
+                                                            Patricia Ward
+                                                    </td>
+                        <td>pward@apex.lab</td>
+                        <td>Workplace Diversity</td>
+                        <td><span class="badge-ou">OU=Workplace Diversity,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bhart</code></td>
+                        <td class="td-nowrap">
+                                                            Bradley Hart
+                                                    </td>
+                        <td>bhart@apex.lab</td>
+                        <td>Product Analytics</td>
+                        <td><span class="badge-ou">OU=Product Analytics,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bpowell</code></td>
+                        <td class="td-nowrap">
+                                                            Bob Powell
+                                                    </td>
+                        <td>bpowell@apex.lab</td>
+                        <td>Cloud Infrastructure</td>
+                        <td><span class="badge-ou">OU=Cloud Infrastructure,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sjones</code></td>
+                        <td class="td-nowrap">
+                                                            Sabrina Jones
+                                                    </td>
+                        <td>sjones@apex.lab</td>
+                        <td>Accounts Payable</td>
+                        <td><span class="badge-ou">OU=Accounts Payable,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cjohnson</code></td>
+                        <td class="td-nowrap">
+                                                            Christopher Johnson
+                                                    </td>
+                        <td>cjohnson@apex.lab</td>
+                        <td>Total Rewards</td>
+                        <td><span class="badge-ou">OU=Total Rewards,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dwelch</code></td>
+                        <td class="td-nowrap">
+                                                            David Welch
+                                                    </td>
+                        <td>dwelch@apex.lab</td>
+                        <td>Environmental Health Safety</td>
+                        <td><span class="badge-ou">OU=Environmental Health Safety,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>lmorgan</code></td>
+                        <td class="td-nowrap">
+                                                            Lisa Morgan
+                                                    </td>
+                        <td>lmorgan@apex.lab</td>
+                        <td>Human Resources</td>
+                        <td><span class="badge-ou">OU=Human Resources,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rrodriguez</code></td>
+                        <td class="td-nowrap">
+                                                            Robert Rodriguez
+                                                    </td>
+                        <td>rrodriguez@apex.lab</td>
+                        <td>Disaster Recovery Operations</td>
+                        <td><span class="badge-ou">OU=Disaster Recovery Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>agonzalez</code></td>
+                        <td class="td-nowrap">
+                                                            Angela Gonzalez
+                                                    </td>
+                        <td>agonzalez@apex.lab</td>
+                        <td>Product Analytics</td>
+                        <td><span class="badge-ou">OU=Product Analytics,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pbolton</code></td>
+                        <td class="td-nowrap">
+                                                            Patricia Bolton
+                                                    </td>
+                        <td>pbolton@apex.lab</td>
+                        <td>Learning and Development</td>
+                        <td><span class="badge-ou">OU=Learning and Development,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>djones</code></td>
+                        <td class="td-nowrap">
+                                                            Darrell Jones
+                                                    </td>
+                        <td>djones@apex.lab</td>
+                        <td>Mobile iOS Development</td>
+                        <td><span class="badge-ou">OU=Mobile iOS Development,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>eblack</code></td>
+                        <td class="td-nowrap">
+                                                            Elizabeth Black
+                                                    </td>
+                        <td>eblack@apex.lab</td>
+                        <td>Demand Generation</td>
+                        <td><span class="badge-ou">OU=Demand Generation,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bmason</code></td>
+                        <td class="td-nowrap">
+                                                            Bobby Mason
+                                                    </td>
+                        <td>bmason@apex.lab</td>
+                        <td>Mobile Android Development</td>
+                        <td><span class="badge-ou">OU=Mobile Android Development,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mbooth</code></td>
+                        <td class="td-nowrap">
+                                                            Michelle Booth
+                                                    </td>
+                        <td>mbooth@apex.lab</td>
+                        <td>Identity Governance</td>
+                        <td><span class="badge-ou">OU=Identity Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>escott</code></td>
+                        <td class="td-nowrap">
+                                                            Eric Scott
+                                                    </td>
+                        <td>escott@apex.lab</td>
+                        <td>Enterprise Product Management</td>
+                        <td><span class="badge-ou">OU=Enterprise Product Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>faustin</code></td>
+                        <td class="td-nowrap">
+                                                            Francis Austin
+                                                    </td>
+                        <td>faustin@apex.lab</td>
+                        <td>Regulatory Affairs</td>
+                        <td><span class="badge-ou">OU=Regulatory Affairs,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>crocha</code></td>
+                        <td class="td-nowrap">
+                                                            Cheryl Rocha
+                                                    </td>
+                        <td>crocha@apex.lab</td>
+                        <td>Privacy and Data Protection</td>
+                        <td><span class="badge-ou">OU=Privacy and Data Protection,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pjones</code></td>
+                        <td class="td-nowrap">
+                                                            Patrick Jones
+                                                    </td>
+                        <td>pjones@apex.lab</td>
+                        <td>Product Management</td>
+                        <td><span class="badge-ou">OU=Product Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>ahale</code></td>
+                        <td class="td-nowrap">
+                                                            Antonio Hale
+                                                    </td>
+                        <td>ahale@apex.lab</td>
+                        <td>Mobile iOS Development</td>
+                        <td><span class="badge-ou">OU=Mobile iOS Development,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>emorris</code></td>
+                        <td class="td-nowrap">
+                                                            Elizabeth Morris
+                                                    </td>
+                        <td>emorris@apex.lab</td>
+                        <td>Event Management</td>
+                        <td><span class="badge-ou">OU=Event Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>syoung</code></td>
+                        <td class="td-nowrap">
+                                                            Sydney Young
+                                                    </td>
+                        <td>syoung@apex.lab</td>
+                        <td>Threat Hunting</td>
+                        <td><span class="badge-ou">OU=Threat Hunting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jmccoy</code></td>
+                        <td class="td-nowrap">
+                                                            James Mccoy
+                                                    </td>
+                        <td>jmccoy@apex.lab</td>
+                        <td>Data Science</td>
+                        <td><span class="badge-ou">OU=Data Science,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rlane</code></td>
+                        <td class="td-nowrap">
+                                                            Richard Lane
+                                                    </td>
+                        <td>rlane@apex.lab</td>
+                        <td>Innovation Lab</td>
+                        <td><span class="badge-ou">OU=Innovation Lab,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jbrewer</code></td>
+                        <td class="td-nowrap">
+                                                            Jodi Brewer
+                                                    </td>
+                        <td>jbrewer@apex.lab</td>
+                        <td>Credit and Risk Management</td>
+                        <td><span class="badge-ou">OU=Credit and Risk Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jdaniel</code></td>
+                        <td class="td-nowrap">
+                                                            James Daniel
+                                                    </td>
+                        <td>jdaniel@apex.lab</td>
+                        <td>Commercial Sales</td>
+                        <td><span class="badge-ou">OU=Commercial Sales,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cjackson</code></td>
+                        <td class="td-nowrap">
+                                                            Crystal Jackson
+                                                    </td>
+                        <td>cjackson@apex.lab</td>
+                        <td>Network Architecture</td>
+                        <td><span class="badge-ou">OU=Network Architecture,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jwoodward</code></td>
+                        <td class="td-nowrap">
+                                                            Joseph Woodward
+                                                    </td>
+                        <td>jwoodward@apex.lab</td>
+                        <td>Vendor Risk Management</td>
+                        <td><span class="badge-ou">OU=Vendor Risk Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cglover</code></td>
+                        <td class="td-nowrap">
+                                                            Catherine Glover
+                                                    </td>
+                        <td>cglover@apex.lab</td>
+                        <td>Identity Governance</td>
+                        <td><span class="badge-ou">OU=Identity Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dwilcox</code></td>
+                        <td class="td-nowrap">
+                                                            David Wilcox
+                                                    </td>
+                        <td>dwilcox@apex.lab</td>
+                        <td>Enterprise Product Management</td>
+                        <td><span class="badge-ou">OU=Enterprise Product Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>lparker</code></td>
+                        <td class="td-nowrap">
+                                                            Lisa Parker
+                                                    </td>
+                        <td>lparker@apex.lab</td>
+                        <td>Global Operations</td>
+                        <td><span class="badge-ou">OU=Global Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bparker</code></td>
+                        <td class="td-nowrap">
+                                                            Barbara Parker
+                                                    </td>
+                        <td>bparker@apex.lab</td>
+                        <td>UX Research</td>
+                        <td><span class="badge-ou">OU=UX Research,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bbaldwin</code></td>
+                        <td class="td-nowrap">
+                                                            Brenda Baldwin
+                                                    </td>
+                        <td>bbaldwin@apex.lab</td>
+                        <td>Litigation Management</td>
+                        <td><span class="badge-ou">OU=Litigation Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bflores</code></td>
+                        <td class="td-nowrap">
+                                                            Bailey Flores
+                                                    </td>
+                        <td>bflores@apex.lab</td>
+                        <td>Market Research</td>
+                        <td><span class="badge-ou">OU=Market Research,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>gjohnson</code></td>
+                        <td class="td-nowrap">
+                                                            Gregory Johnson
+                                                    </td>
+                        <td>gjohnson@apex.lab</td>
+                        <td>Customer Support Engineering</td>
+                        <td><span class="badge-ou">OU=Customer Support Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mneal</code></td>
+                        <td class="td-nowrap">
+                                                            Michael Neal
+                                                    </td>
+                        <td>mneal@apex.lab</td>
+                        <td>Security Operations Center</td>
+                        <td><span class="badge-ou">OU=Security Operations Center,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kmcdaniel</code></td>
+                        <td class="td-nowrap">
+                                                            Kenneth Mcdaniel
+                                                    </td>
+                        <td>kmcdaniel@apex.lab</td>
+                        <td>Learning and Development</td>
+                        <td><span class="badge-ou">OU=Learning and Development,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>plane</code></td>
+                        <td class="td-nowrap">
+                                                            Patrick Lane
+                                                    </td>
+                        <td>plane@apex.lab</td>
+                        <td>Enterprise Storage</td>
+                        <td><span class="badge-ou">OU=Enterprise Storage,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kjones</code></td>
+                        <td class="td-nowrap">
+                                                            Kenneth Jones
+                                                    </td>
+                        <td>kjones@apex.lab</td>
+                        <td>Corporate Tax</td>
+                        <td><span class="badge-ou">OU=Corporate Tax,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tmaldonado</code></td>
+                        <td class="td-nowrap">
+                                                            Tracy Maldonado
+                                                    </td>
+                        <td>tmaldonado@apex.lab</td>
+                        <td>Business Intelligence</td>
+                        <td><span class="badge-ou">OU=Business Intelligence,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>gdunn</code></td>
+                        <td class="td-nowrap">
+                                                            Gabriela Dunn
+                                                    </td>
+                        <td>gdunn@apex.lab</td>
+                        <td>Content Marketing</td>
+                        <td><span class="badge-ou">OU=Content Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tking</code></td>
+                        <td class="td-nowrap">
+                                                            Theresa King
+                                                    </td>
+                        <td>tking@apex.lab</td>
+                        <td>Access Control Operations</td>
+                        <td><span class="badge-ou">OU=Access Control Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jbarrera</code></td>
+                        <td class="td-nowrap">
+                                                            Julie Barrera
+                                                    </td>
+                        <td>jbarrera@apex.lab</td>
+                        <td>Database Administration</td>
+                        <td><span class="badge-ou">OU=Database Administration,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cclayton</code></td>
+                        <td class="td-nowrap">
+                                                            Christopher Clayton
+                                                    </td>
+                        <td>cclayton@apex.lab</td>
+                        <td>Information Technology</td>
+                        <td><span class="badge-ou">OU=Information Technology,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>plong</code></td>
+                        <td class="td-nowrap">
+                                                            Patricia Long
+                                                    </td>
+                        <td>plong@apex.lab</td>
+                        <td>DevOps Engineering</td>
+                        <td><span class="badge-ou">OU=DevOps Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kbarber</code></td>
+                        <td class="td-nowrap">
+                                                            Katherine Barber
+                                                    </td>
+                        <td>kbarber@apex.lab</td>
+                        <td>Cloud Security Engineering</td>
+                        <td><span class="badge-ou">OU=Cloud Security Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mchristensen</code></td>
+                        <td class="td-nowrap">
+                                                            Melissa Christensen
+                                                    </td>
+                        <td>mchristensen@apex.lab</td>
+                        <td>Application Security</td>
+                        <td><span class="badge-ou">OU=Application Security,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>ataylor</code></td>
+                        <td class="td-nowrap">
+                                                            Amber Taylor
+                                                    </td>
+                        <td>ataylor@apex.lab</td>
+                        <td>Data Center Operations</td>
+                        <td><span class="badge-ou">OU=Data Center Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jpowell</code></td>
+                        <td class="td-nowrap">
+                                                            Jean Powell
+                                                    </td>
+                        <td>jpowell@apex.lab</td>
+                        <td>Board Administration</td>
+                        <td><span class="badge-ou">OU=Board Administration,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mchristian</code></td>
+                        <td class="td-nowrap">
+                                                            Michael Christian
+                                                    </td>
+                        <td>mchristian@apex.lab</td>
+                        <td>Social Media Strategy</td>
+                        <td><span class="badge-ou">OU=Social Media Strategy,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jlopez</code></td>
+                        <td class="td-nowrap">
+                                                            Joel Lopez
+                                                    </td>
+                        <td>jlopez@apex.lab</td>
+                        <td>Real Estate Planning</td>
+                        <td><span class="badge-ou">OU=Real Estate Planning,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mlove</code></td>
+                        <td class="td-nowrap">
+                                                            Madison Love
+                                                    </td>
+                        <td>mlove@apex.lab</td>
+                        <td>IT Procurement</td>
+                        <td><span class="badge-ou">OU=IT Procurement,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>arivera</code></td>
+                        <td class="td-nowrap">
+                                                            Ashley Rivera
+                                                    </td>
+                        <td>arivera@apex.lab</td>
+                        <td>Employee Relations</td>
+                        <td><span class="badge-ou">OU=Employee Relations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tvaughn</code></td>
+                        <td class="td-nowrap">
+                                                            Tammy Vaughn
+                                                    </td>
+                        <td>tvaughn@apex.lab</td>
+                        <td>Corporate Finance</td>
+                        <td><span class="badge-ou">OU=Corporate Finance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dcooper</code></td>
+                        <td class="td-nowrap">
+                                                            Derrick Cooper
+                                                    </td>
+                        <td>dcooper@apex.lab</td>
+                        <td>Unified Communications</td>
+                        <td><span class="badge-ou">OU=Unified Communications,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>btorres</code></td>
+                        <td class="td-nowrap">
+                                                            Brandi Torres
+                                                    </td>
+                        <td>btorres@apex.lab</td>
+                        <td>Corporate Governance</td>
+                        <td><span class="badge-ou">OU=Corporate Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jwalters</code></td>
+                        <td class="td-nowrap">
+                                                            Julia Walters
+                                                    </td>
+                        <td>jwalters@apex.lab</td>
+                        <td>Corporate Counsel</td>
+                        <td><span class="badge-ou">OU=Corporate Counsel,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tdiaz</code></td>
+                        <td class="td-nowrap">
+                                                            Tracy Diaz
+                                                    </td>
+                        <td>tdiaz@apex.lab</td>
+                        <td>HR Information Systems</td>
+                        <td><span class="badge-ou">OU=HR Information Systems,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>smurphy</code></td>
+                        <td class="td-nowrap">
+                                                            Samuel Murphy
+                                                    </td>
+                        <td>smurphy@apex.lab</td>
+                        <td>Cryptography and PKI</td>
+                        <td><span class="badge-ou">OU=Cryptography and PKI,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kdavis</code></td>
+                        <td class="td-nowrap">
+                                                            Kenneth Davis
+                                                    </td>
+                        <td>kdavis@apex.lab</td>
+                        <td>MLOps Engineering</td>
+                        <td><span class="badge-ou">OU=MLOps Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>ebrown</code></td>
+                        <td class="td-nowrap">
+                                                            Erin Brown
+                                                    </td>
+                        <td>ebrown@apex.lab</td>
+                        <td>Account Management</td>
+                        <td><span class="badge-ou">OU=Account Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mpitts</code></td>
+                        <td class="td-nowrap">
+                                                            Mark Pitts
+                                                    </td>
+                        <td>mpitts@apex.lab</td>
+                        <td>Product Analytics</td>
+                        <td><span class="badge-ou">OU=Product Analytics,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mtorres</code></td>
+                        <td class="td-nowrap">
+                                                            Mark Torres
+                                                    </td>
+                        <td>mtorres@apex.lab</td>
+                        <td>Accounts Payable</td>
+                        <td><span class="badge-ou">OU=Accounts Payable,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cpena</code></td>
+                        <td class="td-nowrap">
+                                                            Charles Pena
+                                                    </td>
+                        <td>cpena@apex.lab</td>
+                        <td>MLOps Engineering</td>
+                        <td><span class="badge-ou">OU=MLOps Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>lfoster</code></td>
+                        <td class="td-nowrap">
+                                                            Lauren Foster
+                                                    </td>
+                        <td>lfoster@apex.lab</td>
+                        <td>Customer Journey Design</td>
+                        <td><span class="badge-ou">OU=Customer Journey Design,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dpatterson</code></td>
+                        <td class="td-nowrap">
+                                                            Daniel Patterson
+                                                    </td>
+                        <td>dpatterson@apex.lab</td>
+                        <td>Blue Team Operations</td>
+                        <td><span class="badge-ou">OU=Blue Team Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>crichardson</code></td>
+                        <td class="td-nowrap">
+                                                            Cynthia Richardson
+                                                    </td>
+                        <td>crichardson@apex.lab</td>
+                        <td>Sales Enablement</td>
+                        <td><span class="badge-ou">OU=Sales Enablement,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jrodriguez</code></td>
+                        <td class="td-nowrap">
+                                                            Jose Rodriguez
+                                                    </td>
+                        <td>jrodriguez@apex.lab</td>
+                        <td>Board Administration</td>
+                        <td><span class="badge-ou">OU=Board Administration,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cruiz</code></td>
+                        <td class="td-nowrap">
+                                                            Chad Ruiz
+                                                    </td>
+                        <td>cruiz@apex.lab</td>
+                        <td>Client Onboarding</td>
+                        <td><span class="badge-ou">OU=Client Onboarding,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>clarson</code></td>
+                        <td class="td-nowrap">
+                                                            Claudia Larson
+                                                    </td>
+                        <td>clarson@apex.lab</td>
+                        <td>Data Governance</td>
+                        <td><span class="badge-ou">OU=Data Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mpotter</code></td>
+                        <td class="td-nowrap">
+                                                            Misty Potter
+                                                    </td>
+                        <td>mpotter@apex.lab</td>
+                        <td>Inventory Control</td>
+                        <td><span class="badge-ou">OU=Inventory Control,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dfriedman</code></td>
+                        <td class="td-nowrap">
+                                                            David Friedman
+                                                    </td>
+                        <td>dfriedman@apex.lab</td>
+                        <td>Analytics Engineering</td>
+                        <td><span class="badge-ou">OU=Analytics Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bdurham</code></td>
+                        <td class="td-nowrap">
+                                                            Brittney Durham
+                                                    </td>
+                        <td>bdurham@apex.lab</td>
+                        <td>University Recruiting</td>
+                        <td><span class="badge-ou">OU=University Recruiting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jdeleon</code></td>
+                        <td class="td-nowrap">
+                                                            James Deleon
+                                                    </td>
+                        <td>jdeleon@apex.lab</td>
+                        <td>Patent and Trademark</td>
+                        <td><span class="badge-ou">OU=Patent and Trademark,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rhall</code></td>
+                        <td class="td-nowrap">
+                                                            Renee Hall
+                                                    </td>
+                        <td>rhall@apex.lab</td>
+                        <td>Talent Management</td>
+                        <td><span class="badge-ou">OU=Talent Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>btucker</code></td>
+                        <td class="td-nowrap">
+                                                            Bridget Tucker
+                                                    </td>
+                        <td>btucker@apex.lab</td>
+                        <td>Physical Security Operations</td>
+                        <td><span class="badge-ou">OU=Physical Security Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tlowe</code></td>
+                        <td class="td-nowrap">
+                                                            Travis Lowe
+                                                    </td>
+                        <td>tlowe@apex.lab</td>
+                        <td>Growth Marketing</td>
+                        <td><span class="badge-ou">OU=Growth Marketing,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jboyle</code></td>
+                        <td class="td-nowrap">
+                                                            Jeffery Boyle
+                                                    </td>
+                        <td>jboyle@apex.lab</td>
+                        <td>Capital Markets</td>
+                        <td><span class="badge-ou">OU=Capital Markets,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>zhamilton</code></td>
+                        <td class="td-nowrap">
+                                                            Zoe Hamilton
+                                                    </td>
+                        <td>zhamilton@apex.lab</td>
+                        <td>IT Asset Management</td>
+                        <td><span class="badge-ou">OU=IT Asset Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>wramos</code></td>
+                        <td class="td-nowrap">
+                                                            William Ramos
+                                                    </td>
+                        <td>wramos@apex.lab</td>
+                        <td>Sales Engineering</td>
+                        <td><span class="badge-ou">OU=Sales Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>wwagner</code></td>
+                        <td class="td-nowrap">
+                                                            William Wagner
+                                                    </td>
+                        <td>wwagner@apex.lab</td>
+                        <td>Global Operations</td>
+                        <td><span class="badge-ou">OU=Global Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>aarmstrong</code></td>
+                        <td class="td-nowrap">
+                                                            Andre Armstrong
+                                                    </td>
+                        <td>aarmstrong@apex.lab</td>
+                        <td>Payroll Administration</td>
+                        <td><span class="badge-ou">OU=Payroll Administration,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>amiller</code></td>
+                        <td class="td-nowrap">
+                                                            Amy Miller
+                                                    </td>
+                        <td>amiller@apex.lab</td>
+                        <td>Disaster Recovery Operations</td>
+                        <td><span class="badge-ou">OU=Disaster Recovery Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sconley</code></td>
+                        <td class="td-nowrap">
+                                                            Steven Conley
+                                                    </td>
+                        <td>sconley@apex.lab</td>
+                        <td>Talent Management</td>
+                        <td><span class="badge-ou">OU=Talent Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>hterry</code></td>
+                        <td class="td-nowrap">
+                                                            Heather Terry
+                                                    </td>
+                        <td>hterry@apex.lab</td>
+                        <td>Fleet Operations</td>
+                        <td><span class="badge-ou">OU=Fleet Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kjimenez</code></td>
+                        <td class="td-nowrap">
+                                                            Kevin Jimenez
+                                                    </td>
+                        <td>kjimenez@apex.lab</td>
+                        <td>Organizational Design</td>
+                        <td><span class="badge-ou">OU=Organizational Design,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bjones1</code></td>
+                        <td class="td-nowrap">
+                                                            Benjamin Jones
+                                                    </td>
+                        <td>bjones1@apex.lab</td>
+                        <td>Sales Engineering</td>
+                        <td><span class="badge-ou">OU=Sales Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sgomez</code></td>
+                        <td class="td-nowrap">
+                                                            Steven Gomez
+                                                    </td>
+                        <td>sgomez@apex.lab</td>
+                        <td>Investor Relations</td>
+                        <td><span class="badge-ou">OU=Investor Relations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sbaker</code></td>
+                        <td class="td-nowrap">
+                                                            Sandra Baker
+                                                    </td>
+                        <td>sbaker@apex.lab</td>
+                        <td>IT Change Management</td>
+                        <td><span class="badge-ou">OU=IT Change Management,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rgamble</code></td>
+                        <td class="td-nowrap">
+                                                            Randall Gamble
+                                                    </td>
+                        <td>rgamble@apex.lab</td>
+                        <td>Ethics and Integrity</td>
+                        <td><span class="badge-ou">OU=Ethics and Integrity,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jmelendez</code></td>
+                        <td class="td-nowrap">
+                                                            Joan Melendez
+                                                    </td>
+                        <td>jmelendez@apex.lab</td>
+                        <td>Incident Response</td>
+                        <td><span class="badge-ou">OU=Incident Response,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mperkins</code></td>
+                        <td class="td-nowrap">
+                                                            Michael Perkins
+                                                    </td>
+                        <td>mperkins@apex.lab</td>
+                        <td>Financial Planning and Analysis</td>
+                        <td><span class="badge-ou">OU=Financial Planning and Analysis,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jtaylor</code></td>
+                        <td class="td-nowrap">
+                                                            Jennifer Taylor
+                                                    </td>
+                        <td>jtaylor@apex.lab</td>
+                        <td>Access Control Operations</td>
+                        <td><span class="badge-ou">OU=Access Control Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rcohen</code></td>
+                        <td class="td-nowrap">
+                                                            Richard Cohen
+                                                    </td>
+                        <td>rcohen@apex.lab</td>
+                        <td>Legal Operations</td>
+                        <td><span class="badge-ou">OU=Legal Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cnguyen</code></td>
+                        <td class="td-nowrap">
+                                                            Cristina Nguyen
+                                                    </td>
+                        <td>cnguyen@apex.lab</td>
+                        <td>Business Continuity Planning</td>
+                        <td><span class="badge-ou">OU=Business Continuity Planning,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kweber</code></td>
+                        <td class="td-nowrap">
+                                                            Kimberly Weber
+                                                    </td>
+                        <td>kweber@apex.lab</td>
+                        <td>Threat Hunting</td>
+                        <td><span class="badge-ou">OU=Threat Hunting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sbuckley</code></td>
+                        <td class="td-nowrap">
+                                                            Stephen Buckley
+                                                    </td>
+                        <td>sbuckley@apex.lab</td>
+                        <td>Threat Intelligence</td>
+                        <td><span class="badge-ou">OU=Threat Intelligence,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dmills</code></td>
+                        <td class="td-nowrap">
+                                                            David Mills
+                                                    </td>
+                        <td>dmills@apex.lab</td>
+                        <td>Quality Assurance</td>
+                        <td><span class="badge-ou">OU=Quality Assurance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rmcguire</code></td>
+                        <td class="td-nowrap">
+                                                            Robert Mcguire
+                                                    </td>
+                        <td>rmcguire@apex.lab</td>
+                        <td>Security Architecture</td>
+                        <td><span class="badge-ou">OU=Security Architecture,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kgordon</code></td>
+                        <td class="td-nowrap">
+                                                            Kayla Gordon
+                                                    </td>
+                        <td>kgordon@apex.lab</td>
+                        <td>Artificial Intelligence Research</td>
+                        <td><span class="badge-ou">OU=Artificial Intelligence Research,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jcarr</code></td>
+                        <td class="td-nowrap">
+                                                            Joanne Carr
+                                                    </td>
+                        <td>jcarr@apex.lab</td>
+                        <td>Environmental Compliance</td>
+                        <td><span class="badge-ou">OU=Environmental Compliance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rmendoza</code></td>
+                        <td class="td-nowrap">
+                                                            Rodney Mendoza
+                                                    </td>
+                        <td>rmendoza@apex.lab</td>
+                        <td>MLOps Engineering</td>
+                        <td><span class="badge-ou">OU=MLOps Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>ccole</code></td>
+                        <td class="td-nowrap">
+                                                            Charles Cole
+                                                    </td>
+                        <td>ccole@apex.lab</td>
+                        <td>Fleet Operations</td>
+                        <td><span class="badge-ou">OU=Fleet Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jquinn</code></td>
+                        <td class="td-nowrap">
+                                                            John Quinn
+                                                    </td>
+                        <td>jquinn@apex.lab</td>
+                        <td>Corporate Governance</td>
+                        <td><span class="badge-ou">OU=Corporate Governance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>mjones</code></td>
+                        <td class="td-nowrap">
+                                                            Megan Jones
+                                                    </td>
+                        <td>mjones@apex.lab</td>
+                        <td>Incident Response</td>
+                        <td><span class="badge-ou">OU=Incident Response,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>truiz</code></td>
+                        <td class="td-nowrap">
+                                                            Tracey Ruiz
+                                                    </td>
+                        <td>truiz@apex.lab</td>
+                        <td>Disaster Recovery Operations</td>
+                        <td><span class="badge-ou">OU=Disaster Recovery Operations,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jgarcia</code></td>
+                        <td class="td-nowrap">
+                                                            Jeffrey Garcia
+                                                    </td>
+                        <td>jgarcia@apex.lab</td>
+                        <td>Enterprise Sales EMEA</td>
+                        <td><span class="badge-ou">OU=Enterprise Sales EMEA,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kharrison</code></td>
+                        <td class="td-nowrap">
+                                                            Kyle Harrison
+                                                    </td>
+                        <td>kharrison@apex.lab</td>
+                        <td>Data Architecture</td>
+                        <td><span class="badge-ou">OU=Data Architecture,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>tdavis</code></td>
+                        <td class="td-nowrap">
+                                                            Timothy Davis
+                                                    </td>
+                        <td>tdavis@apex.lab</td>
+                        <td>Regulatory Affairs</td>
+                        <td><span class="badge-ou">OU=Regulatory Affairs,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rwiley</code></td>
+                        <td class="td-nowrap">
+                                                            Ronald Wiley
+                                                    </td>
+                        <td>rwiley@apex.lab</td>
+                        <td>Threat Hunting</td>
+                        <td><span class="badge-ou">OU=Threat Hunting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dsmith</code></td>
+                        <td class="td-nowrap">
+                                                            Douglas Smith
+                                                    </td>
+                        <td>dsmith@apex.lab</td>
+                        <td>QA Automation</td>
+                        <td><span class="badge-ou">OU=QA Automation,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>psmith</code></td>
+                        <td class="td-nowrap">
+                                                            Patricia Smith
+                                                    </td>
+                        <td>psmith@apex.lab</td>
+                        <td>Digital Transformation</td>
+                        <td><span class="badge-ou">OU=Digital Transformation,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>twarren</code></td>
+                        <td class="td-nowrap">
+                                                            Thomas Warren
+                                                    </td>
+                        <td>twarren@apex.lab</td>
+                        <td>Mainframe Systems</td>
+                        <td><span class="badge-ou">OU=Mainframe Systems,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>eroberts</code></td>
+                        <td class="td-nowrap">
+                                                            Erik Roberts
+                                                    </td>
+                        <td>eroberts@apex.lab</td>
+                        <td>Cloud Infrastructure</td>
+                        <td><span class="badge-ou">OU=Cloud Infrastructure,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>edavis</code></td>
+                        <td class="td-nowrap">
+                                                            Elizabeth Davis
+                                                    </td>
+                        <td>edavis@apex.lab</td>
+                        <td>Technical Accounting</td>
+                        <td><span class="badge-ou">OU=Technical Accounting,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>abeck</code></td>
+                        <td class="td-nowrap">
+                                                            Amy Beck
+                                                    </td>
+                        <td>abeck@apex.lab</td>
+                        <td>Endpoint Security</td>
+                        <td><span class="badge-ou">OU=Endpoint Security,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>barnold</code></td>
+                        <td class="td-nowrap">
+                                                            Brent Arnold
+                                                    </td>
+                        <td>barnold@apex.lab</td>
+                        <td>Payroll Administration</td>
+                        <td><span class="badge-ou">OU=Payroll Administration,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>akaiser</code></td>
+                        <td class="td-nowrap">
+                                                            Angela Kaiser
+                                                    </td>
+                        <td>akaiser@apex.lab</td>
+                        <td>SOX Compliance</td>
+                        <td><span class="badge-ou">OU=SOX Compliance,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>shunter</code></td>
+                        <td class="td-nowrap">
+                                                            Sean Hunter
+                                                    </td>
+                        <td>shunter@apex.lab</td>
+                        <td>Strategic Initiatives</td>
+                        <td><span class="badge-ou">OU=Strategic Initiatives,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bsimmons</code></td>
+                        <td class="td-nowrap">
+                                                            Billy Simmons
+                                                    </td>
+                        <td>bsimmons@apex.lab</td>
+                        <td>Data Engineering</td>
+                        <td><span class="badge-ou">OU=Data Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dsimon</code></td>
+                        <td class="td-nowrap">
+                                                            Daniel Simon
+                                                    </td>
+                        <td>dsimon@apex.lab</td>
+                        <td>Information Technology</td>
+                        <td><span class="badge-ou">OU=Information Technology,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>lroberts</code></td>
+                        <td class="td-nowrap">
+                                                            Linda Roberts
+                                                    </td>
+                        <td>lroberts@apex.lab</td>
+                        <td>Core Platform Engineering</td>
+                        <td><span class="badge-ou">OU=Core Platform Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>pthomas</code></td>
+                        <td class="td-nowrap">
+                                                            Patrick Thomas
+                                                    </td>
+                        <td>pthomas@apex.lab</td>
+                        <td>Virtualization Engineering</td>
+                        <td><span class="badge-ou">OU=Virtualization Engineering,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>clee</code></td>
+                        <td class="td-nowrap">
+                                                            Cody Lee
+                                                    </td>
+                        <td>clee@apex.lab</td>
+                        <td>HR Business Partnerships</td>
+                        <td><span class="badge-ou">OU=HR Business Partnerships,OU=Departments</span></td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>slewis</code></td>
+                        <td class="td-nowrap">
+                                                            Scott Lewis
+                                                    </td>
+                        <td>slewis@apex.lab</td>
+                        <td>Warehouse Operations</td>
+                        <td><span class="badge-ou">OU=Warehouse Operations,OU=Departments</span></td>
+                    </tr>
+                                                </tbody>
         </table>
-    </div>
+
+                <div class="pagination-wrapper">
+            <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
+            <div class="pagination-controls" id="paginationControls"></div>
+        </div>
+            </div>
 </div>
 
 <div class="footer">
     Automated HR Identity Management Pipeline • Nginx Service Active
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const rowsPerPage = 10;
+    const tableBody = document.querySelector("#activeTable tbody");
+    const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
+    const totalRows = rows.length;
+    
+    if (totalRows === 0) return;
+
+    let currentPage = 1;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+
+    function displayPage(page) {
+        currentPage = page;
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        rows.forEach((row, index) => {
+            if (index >= start && index < end) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+
+        // Update Info Text
+        const currentEnd = Math.min(end, totalRows);
+        document.getElementById("paginationInfo").innerText = 
+            `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+
+        renderControls();
+    }
+
+    function renderControls() {
+        const controlsContainer = document.getElementById("paginationControls");
+        controlsContainer.innerHTML = "";
+
+        // Previous Button
+        const prevBtn = document.createElement("button");
+        prevBtn.className = "page-btn";
+        prevBtn.innerText = "‹ Prev";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => displayPage(currentPage - 1);
+        controlsContainer.appendChild(prevBtn);
+
+        // Page Number Buttons (Maximum 5 visible for clean layout)
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement("button");
+            pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+            pageBtn.innerText = i;
+            pageBtn.onclick = () => displayPage(i);
+            controlsContainer.appendChild(pageBtn);
+        }
+
+        // Next Button
+        const nextBtn = document.createElement("button");
+        nextBtn.className = "page-btn";
+        nextBtn.innerText = "Next ›";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => displayPage(currentPage + 1);
+        controlsContainer.appendChild(nextBtn);
+    }
+
+    // Initialize Page 1
+    displayPage(1);
+});
+</script>
 
 </body>
 </html>

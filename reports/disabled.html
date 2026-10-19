@@ -222,6 +222,59 @@
             font-size: 14px;
         }
 
+        .td-nowrap {
+            white-space: nowrap;
+        }
+
+        /* Pagination Styles */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .page-btn {
+            background-color: var(--table-header);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .page-btn.active {
+            background-color: var(--accent-blue);
+            color: #0f172a;
+            border-color: var(--accent-blue);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .footer {
             text-align: center;
             font-size: 12px;
@@ -240,11 +293,11 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-10-19 at 02:35:45 PM EDT
+                                                                Generated on 2026-10-19 at 03:06:55 PM EDT
             </div>
         </div>
         <div class="status-badge">
-            DISABLED ACCOUNTS (0)
+            DISABLED ACCOUNTS (20)
         </div>
     </div>
 
@@ -257,7 +310,7 @@
 
     <div class="card">
         <h2>Disabled & Deprovisioned Accounts</h2>
-        <table>
+        <table id="disabledTable">
             <thead>
                 <tr>
                     <th>Username</th>
@@ -269,14 +322,314 @@
                 </tr>
             </thead>
             <tbody>
-                                    <tr>
-                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
-                            No disabled or offboarded accounts present.
+                                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>arusso</code></td>
+                        <td class="td-nowrap">
+                                                            arusso
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('arusso', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
                         </td>
                     </tr>
-                            </tbody>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>kpowers</code></td>
+                        <td class="td-nowrap">
+                                                            kpowers
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('kpowers', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>vlittle</code></td>
+                        <td class="td-nowrap">
+                                                            vlittle
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('vlittle', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>echoi</code></td>
+                        <td class="td-nowrap">
+                                                            echoi
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('echoi', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>croberts</code></td>
+                        <td class="td-nowrap">
+                                                            croberts
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('croberts', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>cflowers</code></td>
+                        <td class="td-nowrap">
+                                                            cflowers
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('cflowers', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dkaufman</code></td>
+                        <td class="td-nowrap">
+                                                            dkaufman
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('dkaufman', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jzuniga</code></td>
+                        <td class="td-nowrap">
+                                                            jzuniga
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('jzuniga', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>rpittman</code></td>
+                        <td class="td-nowrap">
+                                                            rpittman
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('rpittman', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>dkelly</code></td>
+                        <td class="td-nowrap">
+                                                            dkelly
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('dkelly', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>vgibson</code></td>
+                        <td class="td-nowrap">
+                                                            vgibson
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('vgibson', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jperez</code></td>
+                        <td class="td-nowrap">
+                                                            jperez
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('jperez', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>jgordon1</code></td>
+                        <td class="td-nowrap">
+                                                            jgordon1
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('jgordon1', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>sbranch</code></td>
+                        <td class="td-nowrap">
+                                                            sbranch
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('sbranch', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>badams</code></td>
+                        <td class="td-nowrap">
+                                                            badams
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('badams', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>aparker</code></td>
+                        <td class="td-nowrap">
+                                                            aparker
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('aparker', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>nthomas</code></td>
+                        <td class="td-nowrap">
+                                                            nthomas
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('nthomas', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>shernandez</code></td>
+                        <td class="td-nowrap">
+                                                            shernandez
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('shernandez', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>bjones</code></td>
+                        <td class="td-nowrap">
+                                                            bjones
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('bjones', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                        <tr class="table-row">
+                        <td class="td-nowrap"><code>candersen</code></td>
+                        <td class="td-nowrap">
+                                                            candersen
+                                                    </td>
+                        <td>N/A</td>
+                        <td class="td-nowrap">2026-10-19 18:58:26</td>
+                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
+                        <td>
+                            <div class="hold-cell">
+                                                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('candersen', true, this)" class="btn-hold apply">Apply Hold</button>
+                                                            </div>
+                        </td>
+                    </tr>
+                                                </tbody>
         </table>
-    </div>
+
+                <div class="pagination-wrapper">
+            <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
+            <div class="pagination-controls" id="paginationControls"></div>
+        </div>
+            </div>
 </div>
 
 <div class="footer">
@@ -316,6 +669,73 @@ async function toggleLegalHold(username, holdState, btnElement) {
         }
     }
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    const rowsPerPage = 10;
+    const tableBody = document.querySelector("#disabledTable tbody");
+    const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
+    const totalRows = rows.length;
+    
+    if (totalRows === 0) return;
+
+    let currentPage = 1;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+
+    function displayPage(page) {
+        currentPage = page;
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        rows.forEach((row, index) => {
+            if (index >= start && index < end) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+
+        const currentEnd = Math.min(end, totalRows);
+        document.getElementById("paginationInfo").innerText = 
+            `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+
+        renderControls();
+    }
+
+    function renderControls() {
+        const controlsContainer = document.getElementById("paginationControls");
+        controlsContainer.innerHTML = "";
+
+        const prevBtn = document.createElement("button");
+        prevBtn.className = "page-btn";
+        prevBtn.innerText = "‹ Prev";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => displayPage(currentPage - 1);
+        controlsContainer.appendChild(prevBtn);
+
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement("button");
+            pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+            pageBtn.innerText = i;
+            pageBtn.onclick = () => displayPage(i);
+            controlsContainer.appendChild(pageBtn);
+        }
+
+        const nextBtn = document.createElement("button");
+        nextBtn.className = "page-btn";
+        nextBtn.innerText = "Next ›";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => displayPage(currentPage + 1);
+        controlsContainer.appendChild(nextBtn);
+    }
+
+    displayPage(1);
+});
 </script>
 
 </body>
