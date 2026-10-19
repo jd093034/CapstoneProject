@@ -1,0 +1,60 @@
+---
+- name: Identity Lifecycle - Toggle Legal Hold State & Refresh Dashboard
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
+  tasks:
+    - name: Validate target_user argument
+      ansible.builtin.fail:
+        msg: "Missing required argument: target_user"
+      when: target_user is not defined or target_user == ""
+
+    - name: Update Legal Hold status in PostgreSQL
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port | default(5432) }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          UPDATE employees 
+          SET legal_hold = %s::boolean 
+          WHERE username = %s;
+        positional_args:
+          - "{{ hold_state | default('true') }}"
+          - "{{ target_user }}"
+
+    - name: Fetch updated inactive employees from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port | default(5432) }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT username, first_name, last_name, email, department, terminated_at, legal_hold
+          FROM employees
+          WHERE status = 'TERMINATED';
+      register: inactive_hr_users
+
+    - name: Normalize inactive users list
+      ansible.builtin.set_fact:
+        dynamic_inactive_users: >-
+          {{
+            inactive_hr_users.query_result
+            if (inactive_hr_users.query_result is defined and inactive_hr_users.query_result is sequence and inactive_hr_users.query_result is not mapping)
+            else []
+          }}
+
+    - name: Render updated disabled.html report
+      ansible.builtin.template:
+        src: /root/ansible/templates/disabled.html.j2
+        dest: /var/www/html/disabled.html
+        mode: '0644'

@@ -38,7 +38,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
         }
@@ -128,10 +128,12 @@
             background-color: rgba(148, 163, 184, 0.12);
             color: var(--text-muted);
             border: 1px solid var(--border-color);
-            padding: 2px 8px;
+            padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-family: "JetBrains Mono", Consolas, monospace;
+            white-space: nowrap;
+            display: inline-block;
         }
 
         table {
@@ -144,6 +146,7 @@
             text-align: left;
             padding: 14px 16px;
             border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
         th {
@@ -152,10 +155,15 @@
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
         }
 
         td {
             font-size: 14px;
+        }
+
+        .td-nowrap {
+            white-space: nowrap;
         }
 
         .footer {
@@ -165,7 +173,7 @@
             padding-top: 20px;
             border-top: 1px solid rgba(51, 65, 85, 0.4);
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
         }
     </style>
 </head>
@@ -210,8 +218,8 @@
                 {% if active_users_list | default([]) | length > 0 %}
                     {% for u in active_users_list %}
                     <tr>
-                        <td><code>{{ u.username | default('N/A') }}</code></td>
-                        <td>
+                        <td class="td-nowrap"><code>{{ u.username | default('N/A') }}</code></td>
+                        <td class="td-nowrap">
                             {% if u.first_name is defined and u.last_name is defined %}
                                 {{ u.first_name }} {{ u.last_name }}
                             {% elif u.name is defined %}

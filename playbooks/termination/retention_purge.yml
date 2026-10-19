@@ -1,0 +1,126 @@
+---
+# =============================================================================
+# Play 1: Identify Expired Accounts & Purge from PostgreSQL & Authentik
+# =============================================================================
+- name: Identity Lifecycle - 30-Day Retention Automated Purge
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Query Expired Users (Terminated > 30 Days & No Legal Hold)
+    # -------------------------------------------------------------------------
+    - name: Fetch expired inactive accounts from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port | default(5432) }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT username, email 
+          FROM employees 
+          WHERE (status IN ('TERMINATED', 'INACTIVE') OR terminated_at IS NOT NULL)
+            AND terminated_at < NOW() - INTERVAL '30 days'
+            AND (legal_hold IS FALSE OR legal_hold IS NULL);
+      register: expired_users_query
+
+    - name: Set fact for expired users list
+      ansible.builtin.set_fact:
+        expired_users: "{{ expired_users_query.query_result | default([]) }}"
+
+    - name: Display identified expired users for compliance audit
+      ansible.builtin.debug:
+        msg: "Found {{ expired_users | length }} accounts past 30-day retention window: {{ expired_users | map(attribute='username') | list }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Authentik SSO Purge
+    # -------------------------------------------------------------------------
+    - name: Fetch Authentik users for ID resolution
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: 200
+      register: authentik_all_users
+      when: expired_users | length > 0
+
+    - name: Map expired usernames to Authentik PKs
+      ansible.builtin.set_fact:
+        expired_authentik_pks: >-
+          {{
+            authentik_all_users.json.results | default([])
+            | selectattr('username', 'in', (expired_users | map(attribute='username') | list))
+            | map(attribute='pk') | list
+          }}
+      when: expired_users | length > 0
+
+    - name: Permanently delete expired accounts from Authentik
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: [204, 404]
+      loop: "{{ expired_authentik_pks | default([]) }}"
+      when: expired_users | length > 0 and (expired_authentik_pks | default([]) | length > 0)
+
+    # -------------------------------------------------------------------------
+    # 3. PostgreSQL Database Purge
+    # -------------------------------------------------------------------------
+    - name: Delete expired records from employees table
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port | default(5432) }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          DELETE FROM employees 
+          WHERE username = ANY(%s);
+        positional_args:
+          - "{{ expired_users | map(attribute='username') | list }}"
+      when: expired_users | length > 0
+
+# =============================================================================
+# Play 2: Active Directory Purge (WinRM Session)
+# =============================================================================
+- name: Retention Purge - Remove Expired Objects from AD
+  hosts: win_dc
+  gather_facts: false
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  tasks:
+    - name: Permanently remove expired users from Active Directory
+      ansible.windows.win_powershell:
+        script: |
+          $UsersToPurge = @({{ hostvars['localhost']['expired_users'] | map(attribute='username') | map('regex_replace', '^(.*)$', '"$1"') | join(',') }})
+          
+          foreach ($username in $UsersToPurge) {
+              $adUser = Get-ADUser -Filter "SamAccountName -eq '$username'" -ErrorAction SilentlyContinue
+              if ($adUser) {
+                  Remove-ADUser -Identity $adUser.DistinguishedName -Confirm:$false
+                  Write-Output "Purged AD object: $username"
+              }
+          }
+      when: hostvars['localhost']['expired_users'] | default([]) | length > 0
+
+# =============================================================================
+# Play 3: Refresh Dashboard Analytics
+# =============================================================================
+- name: Retention Purge - Sync Dashboard State
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Re-run Master Pipeline to update Nginx HTML reports
+      ansible.builtin.command:
+        cmd: >
+          ansible-playbook -i /root/ansible/inventory/hosts.ini
+          /root/ansible/master_hr_pipeline.yml
+          --vault-password-file /root/ansible/vars/.vault_pass
+          -e "req_hires=0 req_transfers=0 req_terms=0"
+      when: expired_users | default([]) | length > 0

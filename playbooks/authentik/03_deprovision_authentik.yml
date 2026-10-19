@@ -44,27 +44,25 @@
         validate_certs: false
       register: authentik_users
 
-    - name: Build raw JSON string of terminated matches
+    - name: Build list of terminated matches
       ansible.builtin.set_fact:
-        terminated_matches_raw: >-
-          [
-            {% for hr in terminated_hr_users.query_result | default([]) %}
-              {% set match = (authentik_users.json.results | default([]) | selectattr('username', 'eq', hr.username) | list) %}
-              {% if match | length > 0 %}
-                {
-                  "username": "{{ hr.username }}",
-                  "pk": {{ match[0].pk }},
-                  "is_active": {{ match[0].is_active | lower }},
-                  "legal_hold": {{ hr.legal_hold | lower }},
-                  "days_since_term": {{ hr.days_since_termination | int }}
-                }{% if not loop.last %},{% endif %}
-              {% endif %}
-            {% endfor %}
-          ]
-
-    - name: Parse terminated_matches JSON string to native Ansible list
-      ansible.builtin.set_fact:
-        terminated_matches: "{{ terminated_matches_raw | default('[]') | from_json }}"
+        terminated_matches: "{{ matches_raw | from_json }}"
+      vars:
+        matches_raw: >-
+          {% set matches = [] %}
+          {% for hr in (terminated_hr_users.query_result | default([])) %}
+            {% set match = (authentik_users.json.results | default([]) | selectattr('username', 'eq', hr.username) | list) %}
+            {% if match | length > 0 %}
+              {% set _ = matches.append({
+                'username': hr.username,
+                'pk': match[0].pk,
+                'is_active': (match[0].is_active | bool),
+                'legal_hold': (hr.legal_hold | default(false) | bool),
+                'days_since_term': (hr.days_since_termination | default(0) | int)
+              }) %}
+            {% endif %}
+          {% endfor %}
+          {{ matches | to_json }}
 
     # STAGE 1: Day 0 Immediate Offboarding (Deactivate Account)
     - name: Deactivate active terminated accounts in Authentik
@@ -77,10 +75,13 @@
         body_format: json
         body:
           is_active: false
-        status_code: [200]
+        status_code: [200, 204]
         validate_certs: false
       loop: "{{ terminated_matches }}"
       when:
+        - terminated_matches is sequence
+        - terminated_matches is not mapping
+        - terminated_matches | length > 0
         - item.days_since_term <= 30
         - item.is_active == true
       loop_control:
@@ -93,10 +94,13 @@
         method: DELETE
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
-        status_code: [204]
+        status_code: [204, 404]
         validate_certs: false
       loop: "{{ terminated_matches }}"
       when:
+        - terminated_matches is sequence
+        - terminated_matches is not mapping
+        - terminated_matches | length > 0
         - item.days_since_term > 30
         - item.legal_hold == false
       loop_control:

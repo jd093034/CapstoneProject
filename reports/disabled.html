@@ -38,7 +38,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
         }
@@ -128,25 +128,72 @@
             background-color: rgba(148, 163, 184, 0.12);
             color: var(--text-muted);
             border: 1px solid var(--border-color);
-            padding: 2px 8px;
+            padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-family: "JetBrains Mono", Consolas, monospace;
+            white-space: nowrap;
+            display: inline-block;
         }
 
         .badge-hold {
             background-color: rgba(250, 204, 21, 0.15);
             color: var(--accent-yellow);
             border: 1px solid var(--accent-yellow);
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .badge-normal {
             color: var(--text-muted);
             font-size: 12px;
+            white-space: nowrap;
+        }
+
+        /* Flex Container for Legal Hold Alignment */
+        .hold-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        /* Action Buttons for Legal Hold */
+        .btn-hold {
+            padding: 4px 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-hold:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-hold.apply {
+            background-color: #d97706;
+            color: #ffffff;
+        }
+
+        .btn-hold.apply:hover:not(:disabled) {
+            background-color: #b45309;
+        }
+
+        .btn-hold.release {
+            background-color: #4b5563;
+            color: #ffffff;
+        }
+
+        .btn-hold.release:hover:not(:disabled) {
+            background-color: #374151;
         }
 
         table {
@@ -159,6 +206,7 @@
             text-align: left;
             padding: 14px 16px;
             border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
         th {
@@ -167,6 +215,7 @@
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
         }
 
         td {
@@ -180,7 +229,7 @@
             padding-top: 20px;
             border-top: 1px solid rgba(51, 65, 85, 0.4);
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
         }
     </style>
 </head>
@@ -191,7 +240,7 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-10-19 at 11:45:51 AM EDT
+                                                                Generated on 2026-10-19 at 02:35:45 PM EDT
             </div>
         </div>
         <div class="status-badge">
@@ -233,6 +282,41 @@
 <div class="footer">
     Automated HR Identity Management Pipeline • Nginx Service Active
 </div>
+
+<script>
+async function toggleLegalHold(username, holdState, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = "Updating...";
+    }
+
+    try {
+        const response = await fetch('/api/hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, hold_state: holdState })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            alert('Backend Error:\n' + (data.error || 'Execution failed. Check backend logs.'));
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerText = holdState ? "Apply Hold" : "Release";
+            }
+        }
+    } catch (err) {
+        alert('Connection error: ' + err);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerText = holdState ? "Apply Hold" : "Release";
+        }
+    }
+}
+</script>
 
 </body>
 </html>

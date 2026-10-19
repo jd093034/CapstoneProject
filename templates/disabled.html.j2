@@ -38,7 +38,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
         }
@@ -128,25 +128,72 @@
             background-color: rgba(148, 163, 184, 0.12);
             color: var(--text-muted);
             border: 1px solid var(--border-color);
-            padding: 2px 8px;
+            padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-family: "JetBrains Mono", Consolas, monospace;
+            white-space: nowrap;
+            display: inline-block;
         }
 
         .badge-hold {
             background-color: rgba(250, 204, 21, 0.15);
             color: var(--accent-yellow);
             border: 1px solid var(--accent-yellow);
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .badge-normal {
             color: var(--text-muted);
             font-size: 12px;
+            white-space: nowrap;
+        }
+
+        /* Flex Container for Legal Hold Alignment */
+        .hold-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        /* Action Buttons for Legal Hold */
+        .btn-hold {
+            padding: 4px 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-hold:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-hold.apply {
+            background-color: #d97706;
+            color: #ffffff;
+        }
+
+        .btn-hold.apply:hover:not(:disabled) {
+            background-color: #b45309;
+        }
+
+        .btn-hold.release {
+            background-color: #4b5563;
+            color: #ffffff;
+        }
+
+        .btn-hold.release:hover:not(:disabled) {
+            background-color: #374151;
         }
 
         table {
@@ -159,6 +206,7 @@
             text-align: left;
             padding: 14px 16px;
             border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
         th {
@@ -167,6 +215,7 @@
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
         }
 
         td {
@@ -180,7 +229,7 @@
             padding-top: 20px;
             border-top: 1px solid rgba(51, 65, 85, 0.4);
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
         }
     </style>
 </head>
@@ -237,14 +286,18 @@
                             {% endif %}
                         </td>
                         <td>{{ u.department | default('N/A') }}</td>
-                        <td>{{ u.terminated_at[:19] if (u.terminated_at is defined and u.terminated_at) else 'N/A' }}</td>
+                        <td>{{ (u.terminated_at | string)[:19] if (u.terminated_at is defined and u.terminated_at) else 'N/A' }}</td>
                         <td><span class="badge-ou">OU=Users - Disabled</span></td>
                         <td>
-                            {% if u.legal_hold is defined and u.legal_hold %}
-                                <span class="badge-hold">Exempt (Active Hold)</span>
-                            {% else %}
-                                <span class="badge-normal">None</span>
-                            {% endif %}
+                            <div class="hold-cell">
+                                {% if u.legal_hold is defined and u.legal_hold %}
+                                    <span class="badge-hold">Exempt (Active Hold)</span>
+                                    <button onclick="toggleLegalHold('{{ u.username }}', false, this)" class="btn-hold release">Release</button>
+                                {% else %}
+                                    <span class="badge-normal">None</span>
+                                    <button onclick="toggleLegalHold('{{ u.username }}', true, this)" class="btn-hold apply">Apply Hold</button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -263,6 +316,41 @@
 <div class="footer">
     Automated HR Identity Management Pipeline • Nginx Service Active
 </div>
+
+<script>
+async function toggleLegalHold(username, holdState, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = "Updating...";
+    }
+
+    try {
+        const response = await fetch('/api/hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, hold_state: holdState })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            alert('Backend Error:\n' + (data.error || 'Execution failed. Check backend logs.'));
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerText = holdState ? "Apply Hold" : "Release";
+            }
+        }
+    } catch (err) {
+        alert('Connection error: ' + err);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerText = holdState ? "Apply Hold" : "Release";
+        }
+    }
+}
+</script>
 
 </body>
 </html>

@@ -34,7 +34,12 @@
 
     - name: Normalize active users query results to a flat list
       ansible.builtin.set_fact:
-        active_users_list: "{{ active_hr_users.query_result }}"
+        active_users_list: >-
+          {{
+            active_hr_users.query_result
+            if (active_hr_users.query_result is defined and active_hr_users.query_result is sequence and active_hr_users.query_result is not mapping)
+            else []
+          }}
 
     - name: Fetch existing users from Authentik
       ansible.builtin.uri:
@@ -69,9 +74,10 @@
         timeout: 15
       vars:
         existing_usernames: "{{ (initial_authentik_users.json.results | map(attribute='username') | list) if (initial_authentik_users.json is defined and initial_authentik_users.json.results is defined) else [] }}"
-      loop: "{{ active_users_list }}"
+      loop: "{{ active_users_list | default([], true) }}"
       when:
         - active_users_list is sequence
+        - active_users_list is not mapping
         - active_users_list | length > 0
         - item.username is defined
         - item.username not in existing_usernames
@@ -96,8 +102,11 @@
         matched_user: "{{ (all_authentik_users | selectattr('username', 'eq', item.username) | list | first) if (all_authentik_users | selectattr('username', 'eq', item.username) | list | length > 0) else {} }}"
         target_user_pk: "{{ matched_user.pk if (matched_user.pk is defined) else 'UNMATCHED' }}"
         is_currently_active: "{{ matched_user.is_active if (matched_user.is_active is defined) else true }}"
-      loop: "{{ active_users_list }}"
+      loop: "{{ active_users_list | default([], true) }}"
       when:
+        - active_users_list is sequence
+        - active_users_list is not mapping
+        - active_users_list | length > 0
         - target_user_pk != 'UNMATCHED'
         - not is_currently_active
       loop_control:
@@ -149,8 +158,11 @@
         matched_group_list: "{{ authentik_groups | selectattr('name', 'eq', item.department) | list }}"
         matched_user_pk: "{{ matched_user_list[0].pk if (matched_user_list | length > 0 and matched_user_list[0].pk is defined) else 'UNMATCHED' }}"
         target_group_pk: "{{ matched_group_list[0].pk if (matched_group_list | length > 0 and matched_group_list[0].pk is defined) else 'UNMATCHED' }}"
-      loop: "{{ active_users_list }}"
+      loop: "{{ active_users_list | default([], true) }}"
       when:
+        - active_users_list is sequence
+        - active_users_list is not mapping
+        - active_users_list | length > 0
         - target_group_pk != 'UNMATCHED'
         - matched_user_pk != 'UNMATCHED'
       loop_control:

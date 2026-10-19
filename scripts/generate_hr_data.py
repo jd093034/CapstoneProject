@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import psycopg2
 import yaml
 import random
@@ -5,6 +6,8 @@ import argparse
 import json
 import os
 import sys
+import shutil
+import subprocess
 from faker import Faker
 
 fake = Faker()
@@ -32,18 +35,52 @@ def load_departments(filepath):
 # Dynamically load departments list
 REAL_DEPARTMENTS = load_departments(DEPARTMENTS_FILE)
 
-# Load database credentials from vault (supports running from /root/ansible or /root/ansible/scripts)
+# Resolve Vault paths
 vault_path = "vars/vault.yml"
 if not os.path.exists(vault_path):
     vault_path = os.path.join(SCRIPT_DIR, "..", "vars", "vault.yml")
 
-with open(vault_path, "r") as f:
-    vault = yaml.safe_load(f)
+vault_pass_path = os.path.join(os.path.dirname(vault_path), ".vault_pass")
 
-DB_HOST = vault.get("db_host", "localhost")
+def load_vault_config(v_path, p_path):
+    """Decrypts Ansible Vault file in memory to retrieve connection secrets."""
+    vault_bin = shutil.which("ansible-vault") or "/usr/bin/ansible-vault"
+    
+    if os.path.exists(v_path) and os.path.exists(p_path) and os.path.exists(vault_bin):
+        try:
+            cmd = [
+                vault_bin, "view",
+                v_path,
+                "--vault-password-file", p_path
+            ]
+            env = os.environ.copy()
+            env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:" + env.get("PATH", "")
+            
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+            parsed = yaml.safe_load(res.stdout)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception as e:
+            print(f"[!] Warning: Could not decrypt vault via ansible-vault: {e}")
+
+    # Fallback to plain YAML read if unencrypted
+    try:
+        with open(v_path, "r") as f:
+            parsed = yaml.safe_load(f)
+            if isinstance(parsed, dict):
+                return parsed
+    except Exception as e:
+        print(f"[!] Error reading {v_path}: {e}")
+
+    return {}
+
+# Load decrypted vault parameters
+vault = load_vault_config(vault_path, vault_pass_path)
+
+DB_HOST = vault.get("db_host", "10.2.8.106")
 DB_NAME = vault.get("db_name", "hr_db")
-DB_USER = vault.get("vault_db_user", "postgres")
-DB_PASS = vault.get("vault_db_password", "secret")
+DB_USER = vault.get("vault_db_user") or vault.get("db_user", "hr_admin")
+DB_PASS = vault.get("vault_db_password") or vault.get("db_password", "ApexPassword123!")
 DB_PORT = vault.get("db_port", 5432)
 
 def get_db_connection():
