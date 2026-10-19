@@ -40,3 +40,7 @@ ansible-playbook -i /root/ansible/inventory/hosts.ini   /root/ansible/master_hr_
 After there are too many user records, reset the environment
 
 ./wipe_all.sh 
+
+### Retention Purge - >30 Day Accounts after Termination
+
+ansible-playbook -i /root/ansible/inventory/hosts.ini   /root/ansible/playbooks/termination/retention_purge.yml   --vault-password-file /root/ansible/vars/.vault_pass
