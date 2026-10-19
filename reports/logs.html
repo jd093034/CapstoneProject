@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Identity Lifecycle Report - Audit & System Logs</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --table-header: #0f172a;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-green: #22c55e;
+            --accent-blue: #38bdf8;
+            --accent-yellow: #facc15;
+            --accent-red: #ef4444;
+            --accent-purple: #c084fc;
+            --border-color: #334155;
+        }
+
+        html, body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .title-area h1 {
+            margin: 0 0 8px 0;
+            font-size: 28px;
+            color: #38bdf8;
+        }
+
+        .title-area .timestamp {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            background-color: rgba(56, 189, 248, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .status-badge.failed {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border-color: var(--accent-red);
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 14px;
+        }
+
+        .nav-tab {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-main);
+            border-color: var(--accent-blue);
+        }
+
+        .nav-tab.active {
+            color: #0f172a;
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 18px;
+            color: var(--text-main);
+            letter-spacing: 0.3px;
+        }
+
+        .events-container {
+            background-color: #0b1120;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+
+        .events-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            white-space: nowrap;
+        }
+
+        .events-list li {
+            color: #cbd5e1;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+        }
+
+        .events-list li:last-child {
+            border-bottom: none;
+        }
+
+        .tag-hired {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        .tag-transferred {
+            color: var(--accent-blue);
+            font-weight: bold;
+        }
+
+        .tag-terminated {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--table-header);
+            color: var(--text-muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding-top: 20px;
+            border-top: 1px solid rgba(51, 65, 85, 0.4);
+            width: 100%;
+            max-width: 900px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="title-area">
+            <h1>HR Identity Lifecycle Report</h1>
+            <div class="timestamp">
+                                                                Generated on 2026-10-19 at 11:45:51 AM EDT
+            </div>
+        </div>
+        <div class="status-badge">
+            EXECUTION AUDIT LOGS
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <a href="index.html" class="nav-tab">Overview</a>
+        <a href="active.html" class="nav-tab">Active Identities</a>
+        <a href="disabled.html" class="nav-tab">Disabled Accounts</a>
+        <a href="logs.html" class="nav-tab active">Audit & System Logs</a>
+    </nav>
+
+    <div class="card">
+        <h2>Processed Lifecycle Stream</h2>
+        <div class="events-container">
+            <ul class="events-list">
+                                            <li>
+                                            --- Environment Reset Executed: Clean Slate ---
+                                    </li>
+                                        </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Pipeline Execution Telemetry</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Component / Metric</th>
+                    <th>Execution Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Pipeline Return Code</td>
+                    <td><code>rc=0</code></td>
+                </tr>
+                <tr>
+                    <td>Execution Delta</td>
+                    <td><code>0:00:01.000000</code></td>
+                </tr>
+                <tr>
+                    <td>PostgreSQL Sync Status</td>
+                    <td>
+                                                <span class="status-badge ">SUCCESS</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Authentik SSO Sync Status</td>
+                    <td>
+                                                <span class="status-badge ">SUCCESS</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Active Directory Sync Status</td>
+                    <td>
+                                                <span class="status-badge ">SUCCESS</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="footer">
+    Automated HR Identity Management Pipeline • Nginx Service Active
+</div>
+
+</body>
+</html>

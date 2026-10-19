@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Identity Lifecycle Report - Active Identities</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --table-header: #0f172a;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-green: #22c55e;
+            --accent-blue: #38bdf8;
+            --accent-yellow: #facc15;
+            --accent-red: #ef4444;
+            --accent-purple: #c084fc;
+            --border-color: #334155;
+        }
+
+        html, body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .title-area h1 {
+            margin: 0 0 8px 0;
+            font-size: 28px;
+            color: #38bdf8;
+        }
+
+        .title-area .timestamp {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            background-color: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 14px;
+        }
+
+        .nav-tab {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-main);
+            border-color: var(--accent-blue);
+        }
+
+        .nav-tab.active {
+            color: #0f172a;
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 18px;
+            color: var(--text-main);
+            letter-spacing: 0.3px;
+        }
+
+        .badge-ou {
+            background-color: rgba(148, 163, 184, 0.12);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--table-header);
+            color: var(--text-muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding-top: 20px;
+            border-top: 1px solid rgba(51, 65, 85, 0.4);
+            width: 100%;
+            max-width: 900px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="title-area">
+            <h1>HR Identity Lifecycle Report</h1>
+            <div class="timestamp">
+                {% set hour_12 = ansible_facts['date_time']['hour'] | int % 12 %}
+                {% set hour_12 = 12 if hour_12 == 0 else hour_12 %}
+                {% set am_pm = 'PM' if (ansible_facts['date_time']['hour'] | int) >= 12 else 'AM' %}
+                Generated on {{ ansible_facts['date_time']['date'] }} at {{ "%02d" % hour_12 }}:{{ ansible_facts['date_time']['minute'] }}:{{ ansible_facts['date_time']['second'] }} {{ am_pm }} {{ ansible_facts['date_time']['tz'] }}
+            </div>
+        </div>
+        <div class="status-badge">
+            ACTIVE IDENTITIES ({{ active_users_list | default([]) | length }})
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <a href="index.html" class="nav-tab">Overview</a>
+        <a href="active.html" class="nav-tab active">Active Identities</a>
+        <a href="disabled.html" class="nav-tab">Disabled Accounts</a>
+        <a href="logs.html" class="nav-tab">Audit & System Logs</a>
+    </nav>
+
+    <div class="card">
+        <h2>Active Managed Employees</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>AD Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if active_users_list | default([]) | length > 0 %}
+                    {% for u in active_users_list %}
+                    <tr>
+                        <td><code>{{ u.username | default('N/A') }}</code></td>
+                        <td>
+                            {% if u.first_name is defined and u.last_name is defined %}
+                                {{ u.first_name }} {{ u.last_name }}
+                            {% elif u.name is defined %}
+                                {{ u.name }}
+                            {% else %}
+                                {{ u.username | default('N/A') }}
+                            {% endif %}
+                        </td>
+                        <td>{{ u.email | default('N/A') }}</td>
+                        <td>{{ u.department | default('N/A') }}</td>
+                        <td><span class="badge-ou">OU={{ u.department | default('Users') }},OU=Departments</span></td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                            No active employees retrieved from PostgreSQL HR DB.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="footer">
+    Automated HR Identity Management Pipeline • Nginx Service Active
+</div>
+
+</body>
+</html>

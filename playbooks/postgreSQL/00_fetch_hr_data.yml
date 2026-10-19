@@ -21,14 +21,24 @@
         query: "SELECT username, email, first_name, last_name, department FROM employees WHERE status = 'ACTIVE';"
       register: active_hr_users
 
-    - name: Query Inactive Employees from PostgreSQL
+    - name: Query Inactive Employees from PostgreSQL with Offboarding Metadata
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
-        query: "SELECT username, email, first_name, last_name, department FROM employees WHERE status IN ('INACTIVE', 'TERMINATED');"
+        query: |
+          SELECT 
+            username, 
+            email, 
+            first_name, 
+            last_name, 
+            department,
+            COALESCE(terminated_at, NOW())::text AS terminated_at,
+            COALESCE(legal_hold, FALSE) AS legal_hold
+          FROM employees 
+          WHERE status IN ('INACTIVE', 'TERMINATED');
       register: inactive_hr_users
 
     - name: Query User-to-Group Mappings from PostgreSQL
@@ -59,16 +69,19 @@
       ansible.builtin.copy:
         content: "{{ {'dynamic_ad_users': dynamic_ad_users} | to_nice_json }}"
         dest: "/tmp/dynamic_ad_users.json"
+        mode: '0644'
 
     - name: Save inactive users to temp JSON file
       ansible.builtin.copy:
         content: "{{ {'dynamic_inactive_users': dynamic_inactive_users} | to_nice_json }}"
         dest: "/tmp/dynamic_inactive_users.json"
+        mode: '0644'
 
     - name: Save group assignments to temp JSON file
       ansible.builtin.copy:
         content: "{{ dynamic_user_group_assignments | from_json | to_nice_json }}"
         dest: "/tmp/dynamic_user_group_assignments.json"
+        mode: '0644'
 
     - name: Display Extracted Active HR Users Data
       ansible.builtin.debug:

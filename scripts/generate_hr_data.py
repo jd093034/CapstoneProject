@@ -166,7 +166,8 @@ def simulate_termination(cursor, exclude_usernames=None):
         username = user[0]
         cursor.execute("""
             UPDATE employees 
-            SET status = 'TERMINATED' 
+            SET status = 'TERMINATED',
+                terminated_at = NOW() 
             WHERE username = %s;
         """, (username,))
         print(f"[-] TERMINATED: {username}")

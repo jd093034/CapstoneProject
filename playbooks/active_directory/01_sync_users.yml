@@ -1,11 +1,68 @@
 ---
 # ==============================================================================
-# Playbook: Provision Active Users & Sync Groups in Active Directory
+# Playbook: Extract HR Data & Synchronize Active/Inactive Users in AD
 # ==============================================================================
-- name: Sync Active HR Users to Active Directory
+
+# Phase 1: Query PostgreSQL and generate payload files on controller
+- name: Extract Active & Terminated HR Records from PostgreSQL
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
+  tasks:
+    - name: Query Active Employees from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT username, first_name, last_name, email, department
+          FROM employees 
+          WHERE status = 'ACTIVE';
+      register: active_hr_users
+
+    - name: Query Terminated Employees with Offboarding Metadata
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT 
+            username, 
+            email, 
+            COALESCE(terminated_at, NOW())::text AS terminated_at,
+            COALESCE(legal_hold, FALSE) AS legal_hold
+          FROM employees 
+          WHERE status = 'TERMINATED';
+      register: inactive_hr_users
+
+    - name: Save active users JSON payload
+      ansible.builtin.copy:
+        content: "{{ {'dynamic_ad_users': active_hr_users.query_result} | to_nice_json }}"
+        dest: "/tmp/dynamic_ad_users.json"
+        mode: '0644'
+
+    - name: Save inactive users JSON payload
+      ansible.builtin.copy:
+        content: "{{ {'dynamic_inactive_users': inactive_hr_users.query_result} | to_nice_json }}"
+        dest: "/tmp/dynamic_inactive_users.json"
+        mode: '0644'
+
+
+# Phase 2: Push JSON payloads and execute PowerShell sync on Windows DC
+- name: Synchronize Users and Organizational Units in Active Directory
   hosts: win_dc
   gather_facts: false
-
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
@@ -15,7 +72,17 @@
         src: /tmp/dynamic_ad_users.json
         dest: C:\Windows\Temp\dynamic_ad_users.json
 
-    - name: Execute Bulk Active Directory Sync (Single WinRM Session)
-      ansible.windows.win_shell: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/sync_users.ps1') }}"
+    - name: Push inactive users JSON file to Windows DC
+      ansible.windows.win_copy:
+        src: /tmp/dynamic_inactive_users.json
+        dest: C:\Windows\Temp\dynamic_inactive_users.json
+
+    - name: Push PowerShell script to Windows DC
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/sync_users.ps1"
+        dest: C:\Windows\Temp\sync_users.ps1
+
+    - name: Execute Bulk Active Directory Sync Script
+      ansible.windows.win_shell: powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\sync_users.ps1
       environment:
-        DEFAULT_PASSWORD: "{{ default_user_password }}"
+        DEFAULT_PASSWORD: "{{ default_user_password | default(vault_default_user_password | default('')) }}"

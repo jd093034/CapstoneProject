@@ -74,6 +74,10 @@
       ansible.builtin.set_fact:
         active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_users.json', errors='ignore') | default('[]', true) | from_json }}"
 
+    - name: "Phase 4 | Load inactive users JSON for report rendering"
+      ansible.builtin.set_fact:
+        inactive_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_inactive_users.json', errors='ignore') | default('[]', true) | from_json }}"
+
     - name: "Phase 4 | Extract raw log events, execution status, and research analytics"
       ansible.builtin.set_fact:
         raw_events: "{{ hr_script_output.stdout_lines | default([]) }}"
@@ -83,13 +87,17 @@
             if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw)
             else (active_users_raw if active_users_raw is sequence else [])
           }}
-        # System Execution Statuses
+        dynamic_inactive_users: >-
+          {{
+            inactive_users_raw.dynamic_inactive_users
+            if (inactive_users_raw is mapping and 'dynamic_inactive_users' in inactive_users_raw)
+            else (inactive_users_raw if inactive_users_raw is sequence else [])
+          }}
         overall_status: "{{ 'SUCCESS' if ('failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout) or sync_result.rc == 0 else 'FAILED' }}"
         postgres_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
         authentik_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
         ad_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
 
-        # Research & Statistical Metrics
         count_hires: "{{ hr_script_output.stdout_lines | select('search', 'HIRED:') | list | length }}"
         count_transfers: "{{ hr_script_output.stdout_lines | select('search', 'TRANSFERRED:') | list | length }}"
         count_terminations: "{{ hr_script_output.stdout_lines | select('search', 'TERMINATED:') | list | length }}"
@@ -97,15 +105,21 @@
         total_active_managed: "{{ active_users_raw.dynamic_ad_users | default([]) | length if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw) else (active_users_raw | length if active_users_raw is sequence else 0) }}"
         est_time_saved_mins: "{{ ((hr_script_output.stdout_lines | select('search', 'HIRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TRANSFERRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TERMINATED:') | list | length)) * 15 }}"
 
-    - name: "Phase 4 | Render HTML Report locally"
+    - name: "Phase 4 | Render Multi-Page HTML Reports locally"
       ansible.builtin.template:
-        src: "/root/ansible/templates/report.html.j2"
-        dest: "/root/ansible/reports/index.html"
+        src: "/root/ansible/templates/{{ item.src }}"
+        dest: "/root/ansible/reports/{{ item.dest }}"
         mode: '0644'
+      loop:
+        - { src: "index.html.j2", dest: "index.html" }
+        - { src: "active.html.j2", dest: "active.html" }
+        - { src: "disabled.html.j2", dest: "disabled.html" }
+        - { src: "logs.html.j2", dest: "logs.html" }
       vars:
         sync_result: "{{ sync_result }}"
         raw_events: "{{ raw_events }}"
         active_users_list: "{{ active_users_list }}"
+        dynamic_inactive_users: "{{ dynamic_inactive_users }}"
         overall_status: "{{ overall_status }}"
         postgres_status: "{{ postgres_status }}"
         authentik_status: "{{ authentik_status }}"
@@ -117,10 +131,10 @@
         total_active_managed: "{{ total_active_managed }}"
         est_time_saved_mins: "{{ est_time_saved_mins }}"
 
-    - name: "Phase 4 | Publish HTML Report to Nginx web root on 10.2.8.68"
+    - name: "Phase 4 | Publish HTML Reports to Nginx web root on 10.2.8.68"
       ansible.builtin.copy:
-        src: "/root/ansible/reports/index.html"
-        dest: "/var/www/html/index.html"
+        src: "/root/ansible/reports/"
+        dest: "/var/www/html/"
         mode: '0644'
       delegate_to: 10.2.8.68
       vars:

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Identity Lifecycle Report</title>
+    <title>HR Identity Lifecycle Report - Executive Overview</title>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -49,7 +49,7 @@
             align-items: center;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .title-area h1 {
@@ -81,7 +81,39 @@
             border-color: var(--accent-red);
         }
 
-        /* Top Operational Counts Grid */
+        /* Navigation Bar */
+        .navbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 14px;
+        }
+
+        .nav-tab {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-main);
+            border-color: var(--accent-blue);
+        }
+
+        .nav-tab.active {
+            color: #0f172a;
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        /* Metrics Grid */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -121,7 +153,7 @@
             margin-top: 6px;
         }
 
-        /* Side-by-Side Efficiency Comparison Grid */
+        /* Efficiency Grid */
         .comparison-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -173,7 +205,7 @@
             line-height: 1.4;
         }
 
-        /* Structured Research Methodology Banner */
+        /* SLA Methodology Banner */
         .methodology-banner {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -229,7 +261,7 @@
         }
 
         .formula-expression {
-            font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+            font-family: "JetBrains Mono", Consolas, monospace;
             font-size: 13px;
             color: #f8fafc;
             display: flex;
@@ -284,49 +316,6 @@
             letter-spacing: 0.3px;
         }
 
-        .events-container {
-            background-color: #0b1120;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
-            overflow-x: auto;
-        }
-
-        .events-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", Consolas, monospace;
-            font-size: 13px;
-            line-height: 1.8;
-            white-space: nowrap;
-        }
-
-        .events-list li {
-            color: #cbd5e1;
-            padding: 4px 0;
-            border-bottom: 1px solid rgba(51, 65, 85, 0.3);
-        }
-
-        .events-list li:last-child {
-            border-bottom: none;
-        }
-
-        .tag-hired {
-            color: var(--accent-green);
-            font-weight: bold;
-        }
-
-        .tag-transferred {
-            color: var(--accent-blue);
-            font-weight: bold;
-        }
-
-        .tag-terminated {
-            color: var(--accent-red);
-            font-weight: bold;
-        }
-
         table {
             width: 100%;
             border-collapse: collapse;
@@ -369,7 +358,7 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-10-14 at 02:06:09 PM EDT
+                                                                Generated on 2026-10-19 at 11:45:51 AM EDT
             </div>
         </div>
                 <div class="status-badge ">
@@ -377,46 +366,56 @@
         </div>
     </div>
 
-    <!-- Parse Automated Execution Delta from Ansible Task -->
+    <nav class="navbar">
+        <a href="index.html" class="nav-tab active">Overview</a>
+        <a href="active.html" class="nav-tab">Active Identities</a>
+        <a href="disabled.html" class="nav-tab">Disabled Accounts</a>
+        <a href="logs.html" class="nav-tab">Audit & System Logs</a>
+    </nav>
+
+    <!-- Parse Execution Runtime & Metrics -->
                                                     
     <!-- Top Operational Counts Grid -->
     <div class="metrics-grid">
         <div class="metric-card">
             <span class="metric-label">Total Events</span>
-            <span class="metric-value" style="color: var(--accent-blue);">50</span>
+            <span class="metric-value" style="color: var(--accent-blue);">0</span>
             <span class="metric-subtext">Lifecycle Changes</span>
         </div>
         <div class="metric-card">
             <span class="metric-label">Hires / Transfers / Terms</span>
             <span class="metric-value">
-                <span style="color: var(--accent-green);">50</span> /
+                <span style="color: var(--accent-green);">0</span> /
                 <span style="color: var(--accent-yellow);">0</span> /
                 <span style="color: var(--accent-red);">0</span>
             </span>
             <span class="metric-subtext">Event Breakdown</span>
         </div>
         <div class="metric-card">
-            <span class="metric-label">Active Managed Identities</span>
-            <span class="metric-value" style="color: #cbd5e1;">150</span>
-            <span class="metric-subtext">Synced to AD / SSO</span>
+            <span class="metric-label">Active / Disabled Accounts</span>
+            <span class="metric-value">
+                <span style="color: #cbd5e1;">0</span> /
+                <span style="color: var(--accent-red);">0</span>
+            </span>
+            <span class="metric-subtext">AD & SSO Managed</span>
         </div>
         <div class="metric-card">
             <span class="metric-label">Pipeline Runtime</span>
             <span class="metric-value" style="color: var(--accent-green);">
-                67.4 secs
+                1.0 secs
             </span>
             <span class="metric-subtext">Automated Execution</span>
         </div>
     </div>
 
-    <!-- Side-by-Side Research Efficiency Comparison -->
+    <!-- Side-by-Side Efficiency Comparison -->
     <div class="comparison-grid">
         <div class="comparison-card manual">
             <div class="comparison-header">
                 <span class="comparison-title">Manual SLA Baseline</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-yellow);">
-                                    750 mins (12.5 hrs)
+                                    0 mins
                             </div>
             <div class="comparison-desc">
                 Estimated manual effort across Active Directory, Authentik SSO, and PostgreSQL.
@@ -428,7 +427,7 @@
                 <span class="comparison-title">Net Time Saved</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-purple);">
-                                    748.9 mins (12.5 hrs)
+                                    0.0 mins
                             </div>
             <div class="comparison-desc">
                 Net IT administrative overhead eliminated by the automated pipeline this run.
@@ -440,15 +439,15 @@
                 <span class="comparison-title">Efficiency Gain</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-blue);">
-                99.9% Faster
+                99.5% Faster
             </div>
             <div class="comparison-desc">
-                ~668x faster than manual multi-system IT workflows.
+                ~0x faster than manual multi-system IT workflows.
             </div>
         </div>
     </div>
 
-    <!-- SLA & Automation Efficiency Methodology Banner -->
+    <!-- SLA Methodology Banner -->
     <div class="methodology-banner">
         <div class="methodology-header">
             <span class="methodology-title">SLA & Automation Efficiency Model</span>
@@ -457,181 +456,17 @@
         <div class="formula-box">
             <span class="formula-label">Estimated Time Saved Calculation:</span>
             <div class="formula-expression">
-                <span class="formula-token">50 events</span>
+                <span class="formula-token">0 events</span>
                 <span class="formula-op">×</span>
                 <span class="formula-token">15 mins/event baseline</span>
                 <span class="formula-op">=</span>
                 <span class="formula-result">
-                    750 mins (12.5 hours)                </span>
+                    0 mins                 </span>
             </div>
         </div>
         <p class="methodology-footnote">
             *<strong>Methodology Standard:</strong> Assumes an industry standard baseline requiring <strong>15 minutes of manual effort per identity event</strong> (5 mins Active Directory OU/Group provisioning + 5 mins Authentik SSO user/group mapping + 5 mins PostgreSQL HR database record update).
         </p>
-    </div>
-
-    <div class="card">
-        <h2>Processed Lifecycle Events</h2>
-        <div class="events-container">
-            <ul class="events-list">
-                                            <li>
-                                            --- Simulating HR Lifecycle Events ---
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: David Cole (dcole) | Dept: 'HR Information Systems'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Douglas Miller (dmiller) | Dept: 'SOX Compliance'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Kari Rodriguez (krodriguez) | Dept: 'Revenue Operations'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Alicia Williams (awilliams) | Dept: 'Strategic Procurement'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Donna Brown (dbrown) | Dept: 'Growth Marketing'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Katie Cline (kcline1) | Dept: 'Disaster Recovery Operations'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Christopher Schneider (cschneider) | Dept: 'Distributed Systems'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Jessica Mullins (jmullins) | Dept: 'Application Security'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Logan Green (lgreen) | Dept: 'Telecom Engineering'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Dana Khan (dkhan) | Dept: 'Organizational Design'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Anna Parks (aparks) | Dept: 'Customer Journey Design'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Amanda Graham (agraham) | Dept: 'SOX Compliance'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Alexander Ryan (aryan) | Dept: 'International Trade Compliance'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Jennifer Rios (jrios) | Dept: 'Demand Generation'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Thomas Schmidt (tschmidt) | Dept: 'Corporate Governance'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Jason Hoffman (jhoffman) | Dept: 'Employment and Labor Law'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Stephen Garrison (sgarrison) | Dept: 'Sales Enablement'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: David Goodman (dgoodman) | Dept: 'Data Science'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Emily Goodwin (egoodwin) | Dept: 'Vendor Risk Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Robert Lee (rlee) | Dept: 'Threat Hunting'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Carlos Taylor (ctaylor) | Dept: 'Software Engineering'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Tamara Cuevas (tcuevas) | Dept: 'Backend Development'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Greg Moore (gmoore) | Dept: 'Network Security Engineering'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Philip Miller (pmiller) | Dept: 'Enterprise Architecture'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Mark Wilcox (mwilcox) | Dept: 'Customer Success'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Eric Johnson (ejohnson) | Dept: 'Corporate Governance'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Abigail Mccall (amccall) | Dept: 'People Analytics'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Lauren Jones (ljones) | Dept: 'Vendor Risk Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Brandon Meza (bmeza) | Dept: 'IT Procurement'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Christopher Mendez (cmendez) | Dept: 'Account Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Carol Wilson (cwilson) | Dept: 'Linux Systems Engineering'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Emily Moore (emoore) | Dept: 'Research and Development'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Roger Jackson (rjackson) | Dept: 'Strategic Partnerships'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Connor Riley (criley) | Dept: 'Escalation Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Diane Lewis (dlewis) | Dept: 'HR Information Systems'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Michelle Perkins (mperkins) | Dept: 'Technical Account Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Benjamin Curry (bcurry) | Dept: 'Software Engineering'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Chelsea Keller (ckeller) | Dept: 'Facility Operations'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Jessica Owens (jowens) | Dept: 'Systems Integration'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Frank Mays (fmays) | Dept: 'Board Administration'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Donna Brandt (dbrandt) | Dept: 'Support Tier One'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Amanda Webb (awebb) | Dept: 'Internal Audit'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Darren Smith (dsmith) | Dept: 'Workplace Services'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Nicholas Young (nyoung) | Dept: 'Credit and Risk Management'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Traci Brown (tbrown) | Dept: 'Executive Office'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Sarah Wilson (swilson) | Dept: 'Security Architecture'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Jessica Mann (jmann) | Dept: 'Compensation and Benefits'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Joshua Morris (jmorris) | Dept: 'Natural Language Processing'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Glen Page (gpage) | Dept: 'Strategic Initiatives'
-                                    </li>
-                                <li>
-                                            <span class="tag-hired">[+]</span>  HIRED: Kim Thompson (kthompson) | Dept: 'Systems Integration'
-                                    </li>
-                                <li>
-                                            --- Database Update Complete ---
-                                    </li>
-                                        </ul>
-        </div>
     </div>
 
     <div class="card">

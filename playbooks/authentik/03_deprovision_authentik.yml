@@ -1,28 +1,75 @@
 ---
-- name: Step 3 - Deprovision Inactive Accounts in Authentik
+# ==============================================================================
+# Sub-Playbook 3: Deprovision Inactive Accounts & Retention Management in Authentik
+# ==============================================================================
+- name: Step 3 - Deprovision Inactive Accounts & Manage Retention in Authentik
   hosts: localhost
+  gather_facts: false
+
   vars_files:
-    - "../../vars/vault.yml"
+    - "{{ playbook_dir }}/../../vars/vault.yml"
+
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
   tasks:
-    - name: Query Authentik status for inactive employees
+    - name: Fetch terminated employee records from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT 
+            username, 
+            email, 
+            COALESCE(terminated_at, NOW())::text AS terminated_at,
+            COALESCE(legal_hold, FALSE) AS legal_hold,
+            ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(terminated_at, NOW()))) / 86400) AS days_since_termination
+          FROM employees 
+          WHERE status = 'TERMINATED';
+      register: terminated_hr_users
+
+    - name: Fetch existing users from Authentik
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?username={{ item.username }}"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
-        validate_certs: no
-      loop: "{{ dynamic_inactive_users if (dynamic_inactive_users is sequence and dynamic_inactive_users is not mapping) else [] }}"
-      register: authentik_inactive_check
-      check_mode: no
-      when: 
-        - dynamic_inactive_users is defined
-        - dynamic_inactive_users is sequence
-        - dynamic_inactive_users is not mapping
-        - dynamic_inactive_users | length > 0
+          Accept: "application/json"
+        status_code: [200]
+        validate_certs: false
+      register: authentik_users
 
-    - name: Deactivate accounts marked inactive in HR DB
+    - name: Build raw JSON string of terminated matches
+      ansible.builtin.set_fact:
+        terminated_matches_raw: >-
+          [
+            {% for hr in terminated_hr_users.query_result | default([]) %}
+              {% set match = (authentik_users.json.results | default([]) | selectattr('username', 'eq', hr.username) | list) %}
+              {% if match | length > 0 %}
+                {
+                  "username": "{{ hr.username }}",
+                  "pk": {{ match[0].pk }},
+                  "is_active": {{ match[0].is_active | lower }},
+                  "legal_hold": {{ hr.legal_hold | lower }},
+                  "days_since_term": {{ hr.days_since_termination | int }}
+                }{% if not loop.last %},{% endif %}
+              {% endif %}
+            {% endfor %}
+          ]
+
+    - name: Parse terminated_matches JSON string to native Ansible list
+      ansible.builtin.set_fact:
+        terminated_matches: "{{ terminated_matches_raw | default('[]') | from_json }}"
+
+    # STAGE 1: Day 0 Immediate Offboarding (Deactivate Account)
+    - name: Deactivate active terminated accounts in Authentik
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.json.results[0].pk }}/"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.pk }}/"
         method: PATCH
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
@@ -30,11 +77,27 @@
         body_format: json
         body:
           is_active: false
-        status_code: 200
-        validate_certs: no
-      loop: "{{ authentik_inactive_check.results | default([]) }}"
-      when: 
-        - item.skipped is not defined or not item.skipped
-        - item.json is defined
-        - item.json.pagination.count > 0
-        - item.json.results[0].is_active == true
+        status_code: [200]
+        validate_certs: false
+      loop: "{{ terminated_matches }}"
+      when:
+        - item.days_since_term <= 30
+        - item.is_active == true
+      loop_control:
+        label: "Deactivating: {{ item.username }}"
+
+    # STAGE 3: Hard Delete (> 30 Days Retention Expired, Excluding Legal Hold)
+    - name: Hard delete expired terminated accounts from Authentik (> 30 Days)
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.pk }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+        status_code: [204]
+        validate_certs: false
+      loop: "{{ terminated_matches }}"
+      when:
+        - item.days_since_term > 30
+        - item.legal_hold == false
+      loop_control:
+        label: "Purging expired account: {{ item.username }}"

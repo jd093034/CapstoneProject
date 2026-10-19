@@ -109,6 +109,19 @@
       retries: 30
       delay: 1
 
+    # -------------------------------------------------------------------------
+    # 3. Local Dashboard Dynamic State JSON Reset
+    # -------------------------------------------------------------------------
+    - name: Reset dynamic report state JSON files
+      ansible.builtin.copy:
+        content: '[]'
+        dest: "{{ item }}"
+        mode: '0644'
+      loop:
+        - /tmp/dynamic_ad_users.json
+        - /tmp/dynamic_inactive_users.json
+      ignore_errors: true
+
 # =============================================================================
 # Play 2: Active Directory Cleanup (Single-Session Bulk PowerShell)
 # =============================================================================
@@ -120,17 +133,25 @@
 
   tasks:
     # -------------------------------------------------------------------------
-    # 3. Active Directory Bulk Deletion via WinRM Scripting
+    # 4. Active Directory Bulk Deletion via WinRM Scripting
     # -------------------------------------------------------------------------
-    - name: Bulk remove non-system users from AD (Single WinRM Session)
+    - name: Bulk remove non-system active & disabled users from AD
       ansible.windows.win_powershell:
         script: |
           $Excluding = @('Administrator', 'Guest', 'krbtgt', 'Domain Admins', 'Domain Users')
-          Get-ADUser -Filter * -SearchBase "CN=Users,DC=apex,DC=lab" | 
-            Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
-            Remove-ADUser -Confirm:$false
+          $SearchBases = @(
+              "CN=Users,DC=apex,DC=lab",
+              "OU=Users - Disabled,DC=apex,DC=lab",
+              "OU=Users - Disabled,OU=APEX Lab,DC=apex,DC=lab"
+          )
 
-    - name: Bulk remove department security groups from AD (Single WinRM Session)
+          foreach ($base in $SearchBases) {
+              Get-ADUser -Filter * -SearchBase $base -ErrorAction SilentlyContinue | 
+                Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
+                Remove-ADUser -Confirm:$false
+          }
+
+    - name: Bulk remove department security groups from AD
       ansible.windows.win_powershell:
         script: |
           $Excluding = @('Domain Admins', 'Domain Users', 'Domain Guests', 'Enterprise Admins', 'Schema Admins')
@@ -138,6 +159,63 @@
             Where-Object { $Excluding -notcontains $_.Name } | 
             Remove-ADGroup -Confirm:$false
 
+# =============================================================================
+# Play 3: Reset Web Dashboard Reports
+# =============================================================================
+- name: Environment Reset - Publish Clean Slate Web Dashboard
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - /root/ansible/vars/vault.yml
+
+  tasks:
+    - name: Ensure reports directory exists locally
+      ansible.builtin.file:
+        path: "/root/ansible/reports"
+        state: directory
+        mode: '0755'
+
+    - name: Render Reset Multi-Page HTML Reports locally
+      ansible.builtin.template:
+        src: "/root/ansible/templates/{{ item.src }}"
+        dest: "/root/ansible/reports/{{ item.dest }}"
+        mode: '0644'
+      loop:
+        - { src: "index.html.j2", dest: "index.html" }
+        - { src: "active.html.j2", dest: "active.html" }
+        - { src: "disabled.html.j2", dest: "disabled.html" }
+        - { src: "logs.html.j2", dest: "logs.html" }
+      vars:
+        sync_result:
+          rc: 0
+          delta: "0:00:01.000000"
+        raw_events:
+          - "--- Environment Reset Executed: Clean Slate ---"
+        active_users_list: []
+        dynamic_inactive_users: []
+        overall_status: "SUCCESS"
+        postgres_status: "SUCCESS"
+        authentik_status: "SUCCESS"
+        ad_status: "SUCCESS"
+        count_hires: 0
+        count_transfers: 0
+        count_terminations: 0
+        total_events: 0
+        total_active_managed: 0
+        est_time_saved_mins: 0
+
+    - name: Publish Reset HTML Reports to Nginx web root on 10.2.8.68
+      ansible.builtin.copy:
+        src: "/root/ansible/reports/"
+        dest: "/var/www/html/"
+        mode: '0644'
+      delegate_to: 10.2.8.68
+      vars:
+        ansible_connection: ssh
+        ansible_port: 22
+        ansible_user: "{{ vault_ssh_user }}"
+        ansible_password: "{{ vault_ssh_password }}"
+
     - name: Reset confirmation message
       ansible.builtin.debug:
-        msg: "Environment reset complete. PostgreSQL, Authentik, AD users, and AD department groups have been purged."
+        msg: "Environment reset complete. All backend systems purged and web dashboard reset to clean state."
