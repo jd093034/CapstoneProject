@@ -1,8 +1,7 @@
 # Capstone Project
 
-TODO: 
-
-# Functions
+# TODO: 
+## Functions
 
 - Staged Deprovisioning
   - Disable user in AD, move them to OU = Disabled Users
@@ -21,7 +20,7 @@ TODO:
 - Real-Time Sync
   - Listen/Notify trigger on database to run the sync when someone is hired/transferred/terminated
   
-# QoL
+## QoL
 
 - Email about Conflicts
 - Create a --check or audit playbook to check for Identity Drift
