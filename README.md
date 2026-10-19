@@ -2,11 +2,6 @@
 
 # TODO: 
 ## Functions
-
-- Staged Deprovisioning
-  - Keep user object in-tact for 30-day window
-  - Then would automatically purge the account after this window
- 
 - Dynamic Password Generation
   - Generate a cryotpgrahically secure random temp password
   - Can also utilize Authentik "invitation/enrollment flow api" to generate one-time magic links to email to new hires
