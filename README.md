@@ -6,7 +6,6 @@
 - Staged Deprovisioning
   - Disable user in AD, move them to OU = Disabled Users
   - Keep user object in-tact for 30-day window
-  - This would correspond to law/practice to keep user data for 60-90 days before deletion
   - Then would automatically purge the account after this window
  
 - Dynamic Password Generation
