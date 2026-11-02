@@ -5,6 +5,11 @@
   vars_files:
     - vars/vault.yml
 
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
   vars_prompt:
     - name: req_hires
       prompt: "How many NEW HIRES do you want to generate?"
@@ -70,40 +75,136 @@
         state: directory
         mode: '0755'
 
-    - name: "Phase 4 | Load active users JSON for report rendering"
+    - name: "Phase 4 | Query active accounts directly from PostgreSQL"
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: >
+          SELECT 
+            username, 
+            first_name, 
+            last_name, 
+            department, 
+            email, 
+            status, 
+            legal_hold
+          FROM employees 
+          WHERE status = 'ACTIVE'
+          ORDER BY username ASC;
+      register: pg_active_users
+      ignore_errors: true
+
+    - name: "Phase 4 | Query terminated accounts directly from PostgreSQL"
+      community.postgresql.postgresql_query:
+        login_db: "{{ db_name }}"
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: >
+          SELECT 
+            username, 
+            first_name, 
+            last_name, 
+            department, 
+            email, 
+            status, 
+            TO_CHAR(terminated_at, 'YYYY-MM-DD HH24:MI:SS') AS terminated_at, 
+            legal_hold
+          FROM employees 
+          WHERE status = 'TERMINATED'
+          ORDER BY terminated_at DESC;
+      register: pg_inactive_users
+      ignore_errors: true
+
+    - name: "Phase 4 | Audit live Authentik active user state"
+      ansible.builtin.uri:
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?is_active=true&page_size=5000"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_authentik_token }}"
+          Accept: "application/json"
+        status_code: [200]
+        validate_certs: false
+        timeout: 15
+      register: authentik_audit_check
+      ignore_errors: true
+
+    - name: "Phase 4 | Load active users JSON for fallback"
       ansible.builtin.set_fact:
         active_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_users.json', errors='ignore') | default('[]', true) | from_json }}"
 
-    - name: "Phase 4 | Load inactive users JSON for report rendering"
+    - name: "Phase 4 | Load inactive users JSON for fallback"
       ansible.builtin.set_fact:
         inactive_users_raw: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_inactive_users.json', errors='ignore') | default('[]', true) | from_json }}"
 
-    - name: "Phase 4 | Extract raw log events, execution status, and research analytics"
+    - name: "Phase 4 | Extract raw log events and base datasets"
       ansible.builtin.set_fact:
         raw_events: "{{ hr_script_output.stdout_lines | default([]) }}"
         active_users_list: >-
           {{
-            active_users_raw.dynamic_ad_users
-            if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw)
-            else (active_users_raw if active_users_raw is sequence else [])
+            pg_active_users.query_result
+            if (pg_active_users is not failed and pg_active_users.query_result is defined and pg_active_users.query_result | length > 0)
+            else (
+              active_users_raw.dynamic_ad_users
+              if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw)
+              else (active_users_raw if active_users_raw is sequence else [])
+            )
           }}
         dynamic_inactive_users: >-
           {{
-            inactive_users_raw.dynamic_inactive_users
-            if (inactive_users_raw is mapping and 'dynamic_inactive_users' in inactive_users_raw)
-            else (inactive_users_raw if inactive_users_raw is sequence else [])
+            pg_inactive_users.query_result
+            if (pg_inactive_users is not failed and pg_inactive_users.query_result is defined and pg_inactive_users.query_result | length > 0)
+            else (
+              inactive_users_raw.dynamic_inactive_users
+              if (inactive_users_raw is mapping and 'dynamic_inactive_users' in inactive_users_raw)
+              else (inactive_users_raw if inactive_users_raw is sequence else [])
+            )
           }}
-        overall_status: "{{ 'SUCCESS' if ('failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout) or sync_result.rc == 0 else 'FAILED' }}"
-        postgres_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
-        authentik_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
-        ad_status: "{{ 'SUCCESS' if 'failed=0' in sync_result.stdout and 'unreachable=0' in sync_result.stdout else 'FAILED' }}"
 
+    - name: "Phase 4 | Perform live account reconciliation & accuracy calculations"
+      ansible.builtin.set_fact:
+        target_term_usernames: "{{ pg_inactive_users.query_result | default([]) | map(attribute='username') | list }}"
+        authentik_active_usernames: "{{ authentik_audit_check.json.results | default([]) | map(attribute='username') | list }}"
+        ad_disabled_usernames: "{{ dynamic_inactive_users | default([]) | map(attribute='username') | list }}"
+
+    - name: "Phase 4 | Compute itemized probe metrics and mismatch counts"
+      ansible.builtin.set_fact:
+        total_target_terms: "{{ target_term_usernames | length }}"
+        authentik_mismatch_list: "{{ target_term_usernames | intersect(authentik_active_usernames) }}"
+        ad_mismatch_list: "{{ target_term_usernames | difference(ad_disabled_usernames) }}"
+
+    - name: "Phase 4 | Finalize count math and sync accuracy rates"
+      ansible.builtin.set_fact:
+        authentik_mismatches: "{{ authentik_mismatch_list | length }}"
+        ad_mismatches: "{{ ad_mismatch_list | length }}"
+        authentik_synced_count: "{{ [total_target_terms - (authentik_mismatch_list | length), 0] | max }}"
+        ad_synced_count: "{{ [total_target_terms - (ad_mismatch_list | length), 0] | max }}"
+        total_probes_conducted: "{{ total_target_terms * 2 }}"
+        total_verified_matches: "{{ ([total_target_terms - (authentik_mismatch_list | length), 0] | max) + ([total_target_terms - (ad_mismatch_list | length), 0] | max) }}"
+        total_mismatches: "{{ (authentik_mismatch_list | length) + (ad_mismatch_list | length) }}"
+        sync_accuracy_rate: >-
+          {{
+            ((( ([total_target_terms - (authentik_mismatch_list | length), 0] | max) + ([total_target_terms - (ad_mismatch_list | length), 0] | max) ) / (total_target_terms * 2 if total_target_terms > 0 else 1)) * 100) | round(1)
+            if total_target_terms > 0
+            else 100.0
+          }}
+        postgres_status: "{{ 'SUCCESS' if (pg_active_users is not failed and pg_inactive_users is not failed) else 'FAILED' }}"
+        authentik_status: "{{ 'SUCCESS' if (authentik_audit_check is not failed and (authentik_mismatch_list | length == 0)) else 'FAILED' }}"
+        ad_status: "{{ 'SUCCESS' if (ad_mismatch_list | length == 0 and (sync_result.rc | default(1) == 0)) else 'FAILED' }}"
         count_hires: "{{ hr_script_output.stdout_lines | select('search', 'HIRED:') | list | length }}"
         count_transfers: "{{ hr_script_output.stdout_lines | select('search', 'TRANSFERRED:') | list | length }}"
         count_terminations: "{{ hr_script_output.stdout_lines | select('search', 'TERMINATED:') | list | length }}"
         total_events: "{{ (hr_script_output.stdout_lines | select('search', 'HIRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TRANSFERRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TERMINATED:') | list | length) }}"
-        total_active_managed: "{{ active_users_raw.dynamic_ad_users | default([]) | length if (active_users_raw is mapping and 'dynamic_ad_users' in active_users_raw) else (active_users_raw | length if active_users_raw is sequence else 0) }}"
+        total_active_managed: "{{ pg_active_users.query_result | length if (pg_active_users is not failed and pg_active_users.query_result is defined) else 0 }}"
         est_time_saved_mins: "{{ ((hr_script_output.stdout_lines | select('search', 'HIRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TRANSFERRED:') | list | length) + (hr_script_output.stdout_lines | select('search', 'TERMINATED:') | list | length)) * 15 }}"
+
+    - name: "Phase 4 | Set overall status based on verified state"
+      ansible.builtin.set_fact:
+        overall_status: "{{ 'SUCCESS' if (postgres_status == 'SUCCESS' and authentik_status == 'SUCCESS' and ad_status == 'SUCCESS') else 'FAILED' }}"
 
     - name: "Phase 4 | Render Multi-Page HTML Reports locally"
       ansible.builtin.template:
@@ -120,6 +221,7 @@
         raw_events: "{{ raw_events }}"
         active_users_list: "{{ active_users_list }}"
         dynamic_inactive_users: "{{ dynamic_inactive_users }}"
+        disabled_users: "{{ dynamic_inactive_users }}"
         overall_status: "{{ overall_status }}"
         postgres_status: "{{ postgres_status }}"
         authentik_status: "{{ authentik_status }}"
@@ -130,6 +232,17 @@
         total_events: "{{ total_events }}"
         total_active_managed: "{{ total_active_managed }}"
         est_time_saved_mins: "{{ est_time_saved_mins }}"
+        total_target_terms: "{{ total_target_terms }}"
+        authentik_synced_count: "{{ authentik_synced_count }}"
+        ad_synced_count: "{{ ad_synced_count }}"
+        authentik_mismatches: "{{ authentik_mismatches }}"
+        ad_mismatches: "{{ ad_mismatches }}"
+        authentik_mismatch_list: "{{ authentik_mismatch_list }}"
+        ad_mismatch_list: "{{ ad_mismatch_list }}"
+        total_probes_conducted: "{{ total_probes_conducted }}"
+        total_verified_matches: "{{ total_verified_matches }}"
+        total_mismatches: "{{ total_mismatches }}"
+        sync_accuracy_rate: "{{ sync_accuracy_rate }}"
 
     - name: "Phase 4 | Publish HTML Reports to Nginx web root on 10.2.8.68"
       ansible.builtin.copy:

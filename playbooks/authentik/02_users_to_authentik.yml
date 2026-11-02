@@ -43,7 +43,7 @@
 
     - name: Fetch existing users from Authentik
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
@@ -114,7 +114,7 @@
 
     - name: Refresh current users from Authentik
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
@@ -127,7 +127,7 @@
 
     - name: Refresh current groups from Authentik
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"

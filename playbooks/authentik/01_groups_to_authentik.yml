@@ -61,4 +61,4 @@
       loop: "{{ missing_departments }}"
       when: missing_departments | length > 0
       loop_control:
-        label: "{{ item }}"
+        label: "Department: {{ item }}"

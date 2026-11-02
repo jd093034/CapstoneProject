@@ -37,13 +37,16 @@
     # -------------------------------------------------------------------------
     # 2. Authentik Cleanup (Asynchronous Concurrent HTTP Requests)
     # -------------------------------------------------------------------------
-    - name: Fetch all non-system users from Authentik
+    - name: Fetch all non-system users from Authentik (Page Size 5000)
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
-        status_code: 200
+          Accept: "application/json"
+        status_code: [200]
+        validate_certs: false
+        timeout: 30
       register: authentik_users
 
     - name: Delete non-system users from Authentik (Async Parallel)
@@ -53,23 +56,28 @@
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
         status_code: [204, 404]
-      loop: "{{ authentik_users.json.results }}"
+        validate_certs: false
+        timeout: 15
+      loop: "{{ authentik_users.json.results | default([]) }}"
       loop_control:
         label: "{{ item.username }}"
       when: 
         - item.username not in ['akadmin', 'anonymous']
         - not item.username.startswith('ak-outpost-')
-      async: 30
+      async: 120
       poll: 0
       register: async_user_deletes
 
-    - name: Fetch custom groups from Authentik
+    - name: Fetch custom groups from Authentik (Page Size 5000)
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
-        status_code: 200
+          Accept: "application/json"
+        status_code: [200]
+        validate_certs: false
+        timeout: 30
       register: authentik_groups
 
     - name: Delete custom department groups from Authentik (Async Parallel)
@@ -79,13 +87,15 @@
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
         status_code: [204, 404]
-      loop: "{{ authentik_groups.json.results }}"
+        validate_certs: false
+        timeout: 15
+      loop: "{{ authentik_groups.json.results | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
       when: 
         - item.is_superuser == false 
         - item.name not in ['authentik Admins']
-      async: 30
+      async: 120
       poll: 0
       register: async_group_deletes
 
@@ -96,8 +106,8 @@
       when: item.ansible_job_id is defined
       register: async_user_results
       until: async_user_results.finished
-      retries: 30
-      delay: 1
+      retries: 60
+      delay: 2
 
     - name: Wait for Authentik async group deletions to complete
       ansible.builtin.async_status:
@@ -106,8 +116,8 @@
       when: item.ansible_job_id is defined
       register: async_group_results
       until: async_group_results.finished
-      retries: 30
-      delay: 1
+      retries: 60
+      delay: 2
 
     # -------------------------------------------------------------------------
     # 3. Local Dashboard Dynamic State JSON Reset
@@ -141,12 +151,12 @@
           $Excluding = @('Administrator', 'Guest', 'krbtgt', 'Domain Admins', 'Domain Users')
           $SearchBases = @(
               "CN=Users,DC=apex,DC=lab",
-              "OU=Users - Disabled,DC=apex,DC=lab",
-              "OU=Users - Disabled,OU=APEX Lab,DC=apex,DC=lab"
+              "OU=APEX Lab,DC=apex,DC=lab",
+              "OU=Users - Disabled,DC=apex,DC=lab"
           )
 
           foreach ($base in $SearchBases) {
-              Get-ADUser -Filter * -SearchBase $base -ErrorAction SilentlyContinue | 
+              Get-ADUser -Filter * -SearchBase $base -SearchScope Subtree -ErrorAction SilentlyContinue | 
                 Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
                 Remove-ADUser -Confirm:$false
           }
@@ -155,7 +165,7 @@
       ansible.windows.win_powershell:
         script: |
           $Excluding = @('Domain Admins', 'Domain Users', 'Domain Guests', 'Enterprise Admins', 'Schema Admins')
-          Get-ADGroup -Filter * -SearchBase "OU=Departments,OU=APEX Lab,DC=apex,DC=lab" -ErrorAction SilentlyContinue | 
+          Get-ADGroup -Filter * -SearchBase "OU=APEX Lab,DC=apex,DC=lab" -SearchScope Subtree -ErrorAction SilentlyContinue | 
             Where-Object { $Excluding -notcontains $_.Name } | 
             Remove-ADGroup -Confirm:$false
 

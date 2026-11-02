@@ -16,6 +16,7 @@
             --accent-yellow: #facc15;
             --accent-red: #ef4444;
             --accent-purple: #c084fc;
+            --accent-orange: #f97316;
             --border-color: #334155;
         }
 
@@ -55,7 +56,7 @@
         .title-area h1 {
             margin: 0 0 8px 0;
             font-size: 28px;
-            color: #38bdf8;
+            color: var(--accent-blue);
         }
 
         .title-area .timestamp {
@@ -124,16 +125,57 @@
             letter-spacing: 0.3px;
         }
 
-        .badge-ou {
-            background-color: rgba(148, 163, 184, 0.12);
-            color: var(--text-muted);
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background-color: #0f172a;
             border: 1px solid var(--border-color);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-family: "JetBrains Mono", Consolas, monospace;
-            white-space: nowrap;
-            display: inline-block;
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .metric-title {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .metric-sub {
+            font-size: 12px;
+            color: var(--accent-green);
+        }
+
+        /* Warning Banner */
+        .warning-banner {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: #fca5a5;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .warning-banner strong {
+            color: #ffffff;
         }
 
         .badge-hold {
@@ -153,7 +195,17 @@
             white-space: nowrap;
         }
 
-        /* Flex Container for Legal Hold Alignment */
+        .badge-speed {
+            background-color: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         .hold-cell {
             display: flex;
             align-items: center;
@@ -161,7 +213,6 @@
             white-space: nowrap;
         }
 
-        /* Action Buttons for Legal Hold */
         .btn-hold {
             padding: 4px 10px;
             font-size: 11px;
@@ -293,11 +344,11 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-10-19 at 03:06:55 PM EDT
+                                                                Generated on 2026-11-02 at 10:50:53 AM EST
             </div>
         </div>
         <div class="status-badge">
-            DISABLED ACCOUNTS (20)
+            DISABLED ACCOUNTS (0)
         </div>
     </div>
 
@@ -308,6 +359,95 @@
         <a href="logs.html" class="nav-tab">Audit & System Logs</a>
     </nav>
 
+    <!-- Multi-System Sync Reconciliation Audit Section -->
+    <div class="card">
+        <h2>Live System Synchronization Audit</h2>
+
+                                                                
+        <!-- Reconciled Probe Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-title">Sync Accuracy Rate</span>
+                <span class="metric-value" style="color: var(--accent-green);">
+                    100.0%
+                </span>
+                <span class="metric-sub" style="color: var(--text-muted);">
+                    0 / 0 Probes Verified
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Active Directory</span>
+                <span class="metric-value">0 / 0</span>
+                <span class="metric-sub" style="color: var(--accent-green);">
+                    100% Synced
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Authentik SSO</span>
+                <span class="metric-value">0 / 0</span>
+                <span class="metric-sub" style="color: var(--accent-green);">
+                    100% Synced
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Mismatches / Flagged</span>
+                <span class="metric-value" style="color: var(--accent-green);">
+                    0
+                </span>
+                <span class="metric-sub" style="color: var(--text-muted);">
+                    Zero Desync Errors
+                </span>
+            </div>
+        </div>
+
+            </div>
+
+    <!-- Time-to-Deprovision Performance Section -->
+    <div class="card">
+        <h2>Time-to-Deprovision Telemetry</h2>
+        
+                        
+        <!-- Top Metric Row -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-title">TOTAL DEPROVISIONED</span>
+                <span class="metric-value">0</span>
+                <span class="metric-sub">HR Target Offboardings</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">PIPELINE RUNTIME</span>
+                <span class="metric-value" style="color: var(--accent-green);">3.4 secs</span>
+                <span class="metric-sub">Automated Execution</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">SLA COMPLIANCE</span>
+                <span class="metric-value" style="color: var(--accent-blue);">100%</span>
+                <span class="metric-sub">Target: &lt; 24 Hours SLA</span>
+            </div>
+        </div>
+
+        <!-- Accent Border Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+            <div style="background-color: #0f172a; border: 1px solid var(--border-color); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--accent-yellow); text-transform: uppercase; letter-spacing: 0.5px;">MANUAL SLA BASELINE</span>
+                <span style="font-size: 24px; font-weight: 700; color: var(--accent-yellow);">0 mins</span>
+                <span style="font-size: 12px; color: var(--text-muted);">Estimated manual effort across Active Directory, Authentik SSO, and PostgreSQL.</span>
+            </div>
+            <div style="background-color: #0f172a; border: 1px solid var(--border-color); border-left: 4px solid var(--accent-purple); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--accent-purple); text-transform: uppercase; letter-spacing: 0.5px;">TOTAL TIME SAVED</span>
+                <span style="font-size: 24px; font-weight: 700; color: var(--accent-purple);">
+                                            0 mins
+                                    </span>
+                <span style="font-size: 12px; color: var(--text-muted);">Net IT administrative overhead eliminated by the automated pipeline.</span>
+            </div>
+            <div style="background-color: #0f172a; border: 1px solid var(--border-color); border-left: 4px solid var(--accent-blue); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.5px;">EFFICIENCY GAIN</span>
+                <span style="font-size: 24px; font-weight: 700; color: var(--accent-blue);">99.5% Faster</span>
+                <span style="font-size: 12px; color: var(--text-muted);">~225x faster than manual multi-system IT workflows.</span>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <h2>Disabled & Deprovisioned Accounts</h2>
         <table id="disabledTable">
@@ -317,318 +457,19 @@
                     <th>Full Name</th>
                     <th>Department</th>
                     <th>Termination Date</th>
-                    <th>AD Location</th>
+                    <th>Deprovision Speed</th>
                     <th>Legal Hold</th>
                 </tr>
             </thead>
             <tbody>
-                                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>arusso</code></td>
-                        <td class="td-nowrap">
-                                                            arusso
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('arusso', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
+                                                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                            No disabled or offboarded accounts present.
                         </td>
                     </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>kpowers</code></td>
-                        <td class="td-nowrap">
-                                                            kpowers
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('kpowers', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>vlittle</code></td>
-                        <td class="td-nowrap">
-                                                            vlittle
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('vlittle', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>echoi</code></td>
-                        <td class="td-nowrap">
-                                                            echoi
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('echoi', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>croberts</code></td>
-                        <td class="td-nowrap">
-                                                            croberts
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('croberts', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>cflowers</code></td>
-                        <td class="td-nowrap">
-                                                            cflowers
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('cflowers', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>dkaufman</code></td>
-                        <td class="td-nowrap">
-                                                            dkaufman
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('dkaufman', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>jzuniga</code></td>
-                        <td class="td-nowrap">
-                                                            jzuniga
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('jzuniga', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>rpittman</code></td>
-                        <td class="td-nowrap">
-                                                            rpittman
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('rpittman', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>dkelly</code></td>
-                        <td class="td-nowrap">
-                                                            dkelly
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('dkelly', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>vgibson</code></td>
-                        <td class="td-nowrap">
-                                                            vgibson
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('vgibson', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>jperez</code></td>
-                        <td class="td-nowrap">
-                                                            jperez
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('jperez', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>jgordon1</code></td>
-                        <td class="td-nowrap">
-                                                            jgordon1
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('jgordon1', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>sbranch</code></td>
-                        <td class="td-nowrap">
-                                                            sbranch
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('sbranch', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>badams</code></td>
-                        <td class="td-nowrap">
-                                                            badams
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('badams', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>aparker</code></td>
-                        <td class="td-nowrap">
-                                                            aparker
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('aparker', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>nthomas</code></td>
-                        <td class="td-nowrap">
-                                                            nthomas
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('nthomas', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>shernandez</code></td>
-                        <td class="td-nowrap">
-                                                            shernandez
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('shernandez', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>bjones</code></td>
-                        <td class="td-nowrap">
-                                                            bjones
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('bjones', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                        <tr class="table-row">
-                        <td class="td-nowrap"><code>candersen</code></td>
-                        <td class="td-nowrap">
-                                                            candersen
-                                                    </td>
-                        <td>N/A</td>
-                        <td class="td-nowrap">2026-10-19 18:58:26</td>
-                        <td><span class="badge-ou">OU=Users - Disabled</span></td>
-                        <td>
-                            <div class="hold-cell">
-                                                                    <span class="badge-normal">None</span>
-                                    <button onclick="toggleLegalHold('candersen', true, this)" class="btn-hold apply">Apply Hold</button>
-                                                            </div>
-                        </td>
-                    </tr>
-                                                </tbody>
+                            </tbody>
         </table>
 
-                <div class="pagination-wrapper">
-            <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
-            <div class="pagination-controls" id="paginationControls"></div>
-        </div>
             </div>
 </div>
 
@@ -673,9 +514,11 @@ async function toggleLegalHold(username, holdState, btnElement) {
 document.addEventListener("DOMContentLoaded", function() {
     const rowsPerPage = 10;
     const tableBody = document.querySelector("#disabledTable tbody");
+    if (!tableBody) return;
+
     const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
     const totalRows = rows.length;
-    
+
     if (totalRows === 0) return;
 
     let currentPage = 1;
@@ -695,14 +538,18 @@ document.addEventListener("DOMContentLoaded", function() {
         });
 
         const currentEnd = Math.min(end, totalRows);
-        document.getElementById("paginationInfo").innerText = 
-            `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+        const infoElem = document.getElementById("paginationInfo");
+        if (infoElem) {
+            infoElem.innerText = `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+        }
 
         renderControls();
     }
 
     function renderControls() {
         const controlsContainer = document.getElementById("paginationControls");
+        if (!controlsContainer) return;
+
         controlsContainer.innerHTML = "";
 
         const prevBtn = document.createElement("button");

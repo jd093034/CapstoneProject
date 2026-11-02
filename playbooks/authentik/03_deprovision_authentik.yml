@@ -33,9 +33,9 @@
           WHERE status = 'TERMINATED';
       register: terminated_hr_users
 
-    - name: Fetch existing users from Authentik
+    - name: Fetch existing users from Authentik (Page Size 5000)
       ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
+        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
         method: GET
         headers:
           Authorization: "Bearer {{ vault_authentik_token }}"
