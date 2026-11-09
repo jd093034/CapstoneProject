@@ -31,22 +31,28 @@ if (Test-Path $inactiveJsonPath) {
 
 Write-Host "Loaded $($users.Count) active user(s) and $($inactiveUsers.Count) inactive user(s) for AD sync."
 
-$domain           = "apex.lab"
-$parentOU         = "OU=APEX Lab,DC=apex,DC=lab"
-$targetOU         = "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
-$disabledOU       = "OU=Users - Disabled,DC=apex,DC=lab"
+$domain            = "apex.lab"
+$parentOU          = "OU=APEX Lab,DC=apex,DC=lab"
+$targetOU          = "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+$disabledOU        = "OU=Users - Disabled,DC=apex,DC=lab"
 $legacyDisabledOUs = @("OU=Disabled Users,DC=apex,DC=lab", "OU=Disabled Users,OU=APEX Lab,DC=apex,DC=lab")
-$userOU           = "CN=Users,DC=apex,DC=lab"
+$userOU            = "CN=Users,DC=apex,DC=lab"
 
-# 1. Ensure new target 'Users - Disabled' OU exists
-$ouName = ($disabledOU -split ',')[0] -replace 'OU=', ''
-$ouPath = ($disabledOU -split ',', 2)[1]
-if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$disabledOU'" -ErrorAction SilentlyContinue)) {
+# ==============================================================================
+# 1. Structure & Organizational Unit (OU) Management (No Sub-OUs)
+# ==============================================================================
+
+# Ensure Disabled Accounts OU exists
+try {
+    $null = Get-ADOrganizationalUnit -Identity $disabledOU -ErrorAction Stop
+} catch {
+    $ouName = ($disabledOU -split ',')[0] -replace 'OU=', ''
+    $ouPath = ($disabledOU -split ',', 2)[1]
     New-ADOrganizationalUnit -Name $ouName -Path $ouPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
     Write-Host "[+] CREATED OU: $ouName at $ouPath"
 }
 
-# 2. Migrate legacy disabled accounts from old OUs & clean them up
+# Migrate legacy disabled accounts if present
 foreach ($oldOU in $legacyDisabledOUs) {
     if (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$oldOU'" -ErrorAction SilentlyContinue) {
         $legacyUsers = Get-ADUser -Filter * -SearchBase $oldOU -ErrorAction SilentlyContinue
@@ -60,11 +66,13 @@ foreach ($oldOU in $legacyDisabledOUs) {
     }
 }
 
-# 3. Ensure required parent OUs exist
+# Ensure parent & target department container OUs exist
 foreach ($ou in @($parentOU, $targetOU)) {
-    $pName = ($ou -split ',')[0] -replace 'OU=', ''
-    $pPath = ($ou -split ',', 2)[1]
-    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$ou'" -ErrorAction SilentlyContinue)) {
+    try {
+        $null = Get-ADOrganizationalUnit -Identity $ou -ErrorAction Stop
+    } catch {
+        $pName = ($ou -split ',')[0] -replace 'OU=', ''
+        $pPath = ($ou -split ',', 2)[1]
         New-ADOrganizationalUnit -Name $pName -Path $pPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
         Write-Host "[+] CREATED OU: $pName at $pPath"
     }
@@ -72,13 +80,53 @@ foreach ($ou in @($parentOU, $targetOU)) {
 
 $secPassword = ConvertTo-SecureString $env:DEFAULT_PASSWORD -AsPlainText -Force
 
-# 4. Process Terminated Users (Staged Offboarding & Legal Hold Checks)
+# ==============================================================================
+# 2. In-Memory Directory Store & Department Group Pre-Caching
+# ==============================================================================
+Write-Host "[*] Pre-caching Active Directory user store and department groups..."
+
+# Cache ALL AD user accounts in 1 single LDAP query (Keyed by lowercase sAMAccountName)
+$ADUserCache = @{}
+Get-ADUser -Filter * -Properties Enabled, DistinguishedName | ForEach-Object {
+    $ADUserCache[$_.SamAccountName.ToLower()] = $_
+}
+
+# Extract unique departments and pre-cache department Security Groups in $targetOU
+$depts        = @($users | Select-Object -ExpandProperty department -Unique | Where-Object { $_ })
+$GroupCache   = @{}
+$GroupMembers = @{}
+
+foreach ($d in $depts) {
+    $groupSam = $d -replace '[\/:*?"<>|]', ''
+    $grp = Get-ADGroup -Filter "SamAccountName -eq '$groupSam'" -ErrorAction SilentlyContinue
+    if (-not $grp) {
+        $grp = New-ADGroup -Name $d -SamAccountName $groupSam -GroupScope Global -GroupCategory Security -Path $targetOU -PassThru -ErrorAction SilentlyContinue
+        Write-Host "[+] CREATED AD SECURITY GROUP: '$d' in $targetOU"
+    }
+    
+    if ($grp) {
+        $GroupCache[$groupSam] = $grp
+        $members = Get-ADGroupMember -Identity $grp.DistinguishedName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SamAccountName
+        $memberHash = @{}
+        foreach ($m in $members) { $memberHash[$m.ToLower()] = $true }
+        $GroupMembers[$groupSam] = $memberHash
+    }
+}
+
+# Queues for bulk RPC group operations
+$PendingGroupAdds    = @{}
+$PendingGroupRemoves = @{}
+
+# ==============================================================================
+# 3. Process Terminated Users (Offboarding & Legal Hold Protocol)
+# ==============================================================================
 foreach ($u in $inactiveUsers) {
     $username = $u.username
     if ([string]::IsNullOrWhiteSpace($username)) { continue }
+    $uLower = $username.ToLower()
 
-    $adUser = Get-ADUser -Filter "SamAccountName -eq '$username'" -ErrorAction SilentlyContinue
-    if ($adUser) {
+    if ($ADUserCache.ContainsKey($uLower)) {
+        $adUser = $ADUserCache[$uLower]
         $daysSinceTerm = 0
         $rawTermAt = [string]$u.terminated_at
         if (-not [string]::IsNullOrWhiteSpace($rawTermAt) -and $rawTermAt -ne "null" -and $rawTermAt -ne "None") {
@@ -92,54 +140,46 @@ foreach ($u in $inactiveUsers) {
 
         $isLegalHold = [bool]$u.legal_hold
 
-        # STAGE 3: Expired Retention Window (> 30 Days)
+        # Expired Retention Window (> 30 Days)
         if ($daysSinceTerm -gt 30) {
             if ($isLegalHold) {
                 Write-Host "[!] LEGAL HOLD ACTIVE: Preserving expired AD account for $username"
             } else {
                 Remove-ADUser -Identity $username -Confirm:$false -ErrorAction SilentlyContinue
+                $ADUserCache.Remove($uLower)
                 Write-Host "[-] PURGED EXPIRED AD USER: $username (Terminated $daysSinceTerm days ago)"
             }
-        }
-        # STAGE 1: Day 0 Immediate Cut-Off & Grace Period (0-30 Days)
+        } 
+        # Active Offboarding & Grace Period (0-30 Days)
         else {
-            # Disable Account
-            Set-ADUser -Identity $username -Enabled $false -ErrorAction SilentlyContinue
+            if ($adUser.Enabled) {
+                Set-ADUser -Identity $username -Enabled $false -ErrorAction SilentlyContinue
+                Write-Host "[-] DISABLED AD USER: $username"
+            }
 
-            # Move to Users - Disabled OU
             if ($adUser.DistinguishedName -notlike "*$disabledOU*") {
                 Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $disabledOU -ErrorAction SilentlyContinue
                 Write-Host "[*] MOVED TO DISABLED OU: $username -> $disabledOU"
             }
 
-            # Strip department security group memberships
-            $currentDeptGroups = Get-ADPrincipalGroupMembership -Identity $username -ErrorAction SilentlyContinue | Where-Object { $_.DistinguishedName -like "*$targetOU*" }
-
-            foreach ($g in $currentDeptGroups) {
-                Remove-ADGroupMember -Identity $g.DistinguishedName -Members $username -Confirm:$false -ErrorAction SilentlyContinue
-                Write-Host "[-] STRIPPED GROUP '$($g.Name)' from $username"
+            # Queue group removal in memory
+            foreach ($gSam in $GroupMembers.Keys) {
+                if ($GroupMembers[$gSam].ContainsKey($uLower)) {
+                    if (-not $PendingGroupRemoves.ContainsKey($gSam)) { $PendingGroupRemoves[$gSam] = @() }
+                    $PendingGroupRemoves[$gSam] += $username
+                }
             }
         }
     }
 }
 
-# 5. Ensure Department Security Groups exist inside Departments OU for Active Users
-$depts = @($users | Select-Object -ExpandProperty department -Unique | Where-Object { $_ })
-foreach ($d in $depts) {
-    $groupSam = $d -replace '[\/:*?"<>|]', ''
-    $grp = Get-ADGroup -Filter "SamAccountName -eq '$groupSam'" -ErrorAction SilentlyContinue
-    if (-not $grp) {
-        New-ADGroup -Name $d -SamAccountName $groupSam -GroupScope Global -GroupCategory Security -Path $targetOU -ErrorAction SilentlyContinue
-        Write-Host "[+] CREATED AD GROUP: '$d'"
-    } else {
-        Write-Host "[=] AD GROUP EXISTS: '$d'"
-    }
-}
-
-# 6. Provision & Sync Active Users
+# ==============================================================================
+# 4. Provision & Synchronize Active Users (Container: CN=Users,DC=apex,DC=lab)
+# ==============================================================================
 foreach ($u in $users) {
     $username = $u.username
     if ([string]::IsNullOrWhiteSpace($username)) { continue }
+    $uLower = $username.ToLower()
 
     $firstName = $u.first_name
     $lastName  = $u.last_name
@@ -147,39 +187,84 @@ foreach ($u in $users) {
     $email     = $u.email
     $dept      = $u.department
 
-    $adUser = Get-ADUser -Filter "SamAccountName -eq '$username'" -ErrorAction SilentlyContinue
-
-    if (-not $adUser) {
-        New-ADUser -Name $fullName -GivenName $firstName -Surname $lastName -UserPrincipalName "$username@$domain" -SamAccountName $username -EmailAddress $email -Path $userOU -AccountPassword $secPassword -Enabled $true -PasswordNeverExpires $true -ErrorAction SilentlyContinue
-        Write-Host "[+] CREATED AD USER: $username ($fullName)"
+    # Create missing account directly in $userOU (CN=Users,DC=apex,DC=lab)
+    if (-not $ADUserCache.ContainsKey($uLower)) {
+        $cnName = "$fullName ($username)"
+        try {
+            New-ADUser -Name $cnName `
+                       -GivenName $firstName `
+                       -Surname $lastName `
+                       -UserPrincipalName "$username@$domain" `
+                       -SamAccountName $username `
+                       -EmailAddress $email `
+                       -Path $userOU `
+                       -AccountPassword $secPassword `
+                       -Enabled $true `
+                       -PasswordNeverExpires $true `
+                       -ErrorAction Stop
+            Write-Host "[+] CREATED AD USER: $username ($cnName) in $userOU"
+        } catch {
+            Write-Error "[!] AD PROVISIONING ERROR for ${username} in ${userOU}: $($_.Exception.Message)"
+        }
     } else {
+        $adUser = $ADUserCache[$uLower]
+        
+        # Re-enable if disabled
         if (-not $adUser.Enabled) {
             Set-ADUser -Identity $username -Enabled $true -ErrorAction SilentlyContinue
             Write-Host "[+] RE-ENABLED AD USER: $username"
         }
 
-        if ($adUser.DistinguishedName -notlike "*$userOU*") {
-            Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $userOU -ErrorAction SilentlyContinue
-            Write-Host "[*] MOVED AD USER: $username -> $userOU"
-        } else {
-            Write-Host "[=] AD USER EXISTS: $username"
-        }
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($dept)) {
-        $deptSam = $dept -replace '[\/:*?"<>|]', ''
-
-        $currentDeptGroups = Get-ADPrincipalGroupMembership -Identity $username -ErrorAction SilentlyContinue | Where-Object { $_.DistinguishedName -like "*$targetOU*" }
-
-        foreach ($g in $currentDeptGroups) {
-            if ($g.SamAccountName -ne $deptSam -and $g.Name -ne $dept) {
-                Remove-ADGroupMember -Identity $g.DistinguishedName -Members $username -Confirm:$false -ErrorAction SilentlyContinue
-                Write-Host "[-] REMOVED $username from stale group '$($g.Name)'"
+        # ONLY execute Move-ADObject if user is coming out of the Disabled OU
+        if ($adUser.DistinguishedName -like "*$disabledOU*") {
+            try {
+                Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $userOU -ErrorAction Stop
+                Write-Host "[*] MOVED AD USER: $username -> $userOU"
+            } catch {
+                Write-Error "[!] ERROR MOVING AD USER ${username}: $($_.Exception.Message)"
             }
         }
+    }
 
-        Add-ADGroupMember -Identity $deptSam -Members $username -ErrorAction SilentlyContinue
-        Write-Host "[+] BOUND $username -> Group '$dept'"
+    # Department Group Membership Queuing
+    if (-not [string]::IsNullOrWhiteSpace($dept)) {
+        $targetDeptSam = $dept -replace '[\/:*?"<>|]', ''
+
+        foreach ($gSam in $GroupMembers.Keys) {
+            if ($gSam -eq $targetDeptSam) {
+                # Add to primary department group if missing
+                if (-not $GroupMembers[$gSam].ContainsKey($uLower)) {
+                    if (-not $PendingGroupAdds.ContainsKey($gSam)) { $PendingGroupAdds[$gSam] = @() }
+                    $PendingGroupAdds[$gSam] += $username
+                }
+            } else {
+                # Strip from stale department groups if present
+                if ($GroupMembers[$gSam].ContainsKey($uLower)) {
+                    if (-not $PendingGroupRemoves.ContainsKey($gSam)) { $PendingGroupRemoves[$gSam] = @() }
+                    $PendingGroupRemoves[$gSam] += $username
+                }
+            }
+        }
     }
 }
+
+# ==============================================================================
+# 5. Bulk Apply Group Membership Changes (Single-Session RPCs)
+# ==============================================================================
+foreach ($gSam in $PendingGroupRemoves.Keys) {
+    $membersToRemove = $PendingGroupRemoves[$gSam]
+    if ($membersToRemove.Count -gt 0) {
+        Remove-ADGroupMember -Identity $gSam -Members $membersToRemove -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Host "[-] BULK STRIPPED $($membersToRemove.Count) account(s) from Group '$gSam'"
+    }
+}
+
+foreach ($gSam in $PendingGroupAdds.Keys) {
+    $membersToAdd = $PendingGroupAdds[$gSam]
+    if ($membersToAdd.Count -gt 0) {
+        Add-ADGroupMember -Identity $gSam -Members $membersToAdd -ErrorAction SilentlyContinue
+        Write-Host "[+] BULK ADDED $($membersToAdd.Count) account(s) to Group '$gSam'"
+    }
+}
+
 exit 0

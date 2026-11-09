@@ -2,7 +2,7 @@
 # ==============================================================================
 # Sub-Playbook 2: Provision Active HR Users and Assign Group Memberships
 # ==============================================================================
-- name: Step 2 - Provision Active Users & Bind to Authentik Groups
+- name: Step 2 - Provision Active Users & Bind to Authentik Groups (High-Speed Parallel)
   hosts: localhost
   gather_facts: false
 
@@ -15,155 +15,20 @@
     db_name: "hr_db"
 
   tasks:
-    - name: Fetch active employee records from PostgreSQL
-      community.postgresql.postgresql_query:
-        login_host: "{{ db_host }}"
-        login_port: "{{ db_port }}"
-        login_db: "{{ db_name }}"
-        login_user: "{{ vault_db_user }}"
-        login_password: "{{ vault_db_password }}"
-        query: |
-          SELECT 
-            username, 
-            CONCAT(first_name, ' ', last_name) AS name, 
-            email, 
-            department
-          FROM employees 
-          WHERE status = 'ACTIVE';
-      register: active_hr_users
+    - name: Execute High-Speed Parallel Authentik User & Group Sync
+      ansible.builtin.command:
+        cmd: "python3 {{ playbook_dir }}/sync_authentik.py"
+      environment:
+        AUTHENTIK_URL: "{{ vault_authentik_url }}"
+        AUTHENTIK_TOKEN: "{{ vault_authentik_token }}"
+        DB_HOST: "{{ db_host }}"
+        DB_PORT: "{{ db_port | string }}"
+        DB_NAME: "{{ db_name }}"
+        DB_USER: "{{ vault_db_user }}"
+        DB_PASSWORD: "{{ vault_db_password }}"
+      register: authentik_sync_out
+      changed_when: "'Provisioning' in authentik_sync_out.stdout or 'Binding' in authentik_sync_out.stdout"
 
-    - name: Normalize active users query results to a flat list
-      ansible.builtin.set_fact:
-        active_users_list: >-
-          {{
-            active_hr_users.query_result
-            if (active_hr_users.query_result is defined and active_hr_users.query_result is sequence and active_hr_users.query_result is not mapping)
-            else []
-          }}
-
-    - name: Fetch existing users from Authentik
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: [200]
-        validate_certs: false
-        timeout: 15
-      register: initial_authentik_users
-      ignore_errors: true
-
-    - name: Ensure active user accounts exist in Authentik (Missing Only)
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/"
-        method: POST
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Content-Type: "application/json"
-        body_format: json
-        body:
-          username: "{{ item.username }}"
-          name: "{{ item.name }}"
-          email: "{{ item.email }}"
-          is_active: true
-          attributes:
-            department: "{{ item.department }}"
-        status_code: [200, 201, 400, 409]
-        validate_certs: false
-        timeout: 15
-      vars:
-        existing_usernames: "{{ (initial_authentik_users.json.results | map(attribute='username') | list) if (initial_authentik_users.json is defined and initial_authentik_users.json.results is defined) else [] }}"
-      loop: "{{ active_users_list | default([], true) }}"
-      when:
-        - active_users_list is sequence
-        - active_users_list is not mapping
-        - active_users_list | length > 0
-        - item.username is defined
-        - item.username not in existing_usernames
-      loop_control:
-        label: "{{ item.username }}"
-
-    - name: Ensure existing inactive user accounts are updated to active in Authentik
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ target_user_pk }}/"
-        method: PATCH
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Content-Type: "application/json"
-        body_format: json
-        body:
-          is_active: true
-        status_code: [200, 201]
-        validate_certs: false
-        timeout: 15
-      vars:
-        all_authentik_users: "{{ initial_authentik_users.json.results if (initial_authentik_users.json is defined and initial_authentik_users.json.results is defined) else [] }}"
-        matched_user: "{{ (all_authentik_users | selectattr('username', 'eq', item.username) | list | first) if (all_authentik_users | selectattr('username', 'eq', item.username) | list | length > 0) else {} }}"
-        target_user_pk: "{{ matched_user.pk if (matched_user.pk is defined) else 'UNMATCHED' }}"
-        is_currently_active: "{{ matched_user.is_active if (matched_user.is_active is defined) else true }}"
-      loop: "{{ active_users_list | default([], true) }}"
-      when:
-        - active_users_list is sequence
-        - active_users_list is not mapping
-        - active_users_list | length > 0
-        - target_user_pk != 'UNMATCHED'
-        - not is_currently_active
-      loop_control:
-        label: "Activating existing user: {{ item.username }}"
-
-    - name: Refresh current users from Authentik
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: [200]
-        validate_certs: false
-        timeout: 15
-      register: refreshed_users
-      ignore_errors: true
-
-    - name: Refresh current groups from Authentik
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=5000"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: [200]
-        validate_certs: false
-        timeout: 15
-      register: refreshed_groups
-      ignore_errors: true
-
-    - name: Assign active users to their department groups
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/{{ target_group_pk }}/add_user/"
-        method: POST
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Content-Type: "application/json"
-        body_format: json
-        body:
-          pk: "{{ matched_user_pk }}"
-        status_code: [200, 201, 204, 400, 409]
-        validate_certs: false
-        timeout: 15
-      vars:
-        all_authentik_users: "{{ refreshed_users.json.results if (refreshed_users.json is defined and refreshed_users.json.results is defined) else [] }}"
-        authentik_groups: "{{ refreshed_groups.json.results if (refreshed_groups.json is defined and refreshed_groups.json.results is defined) else [] }}"
-        matched_user_list: "{{ all_authentik_users | selectattr('username', 'eq', item.username) | list }}"
-        matched_group_list: "{{ authentik_groups | selectattr('name', 'eq', item.department) | list }}"
-        matched_user_pk: "{{ matched_user_list[0].pk if (matched_user_list | length > 0 and matched_user_list[0].pk is defined) else 'UNMATCHED' }}"
-        target_group_pk: "{{ matched_group_list[0].pk if (matched_group_list | length > 0 and matched_group_list[0].pk is defined) else 'UNMATCHED' }}"
-      loop: "{{ active_users_list | default([], true) }}"
-      when:
-        - active_users_list is sequence
-        - active_users_list is not mapping
-        - active_users_list | length > 0
-        - target_group_pk != 'UNMATCHED'
-        - matched_user_pk != 'UNMATCHED'
-      loop_control:
-        label: "{{ item.username }} -> {{ item.department }}"
+    - name: Display Authentik Sync Execution Log
+      ansible.builtin.debug:
+        msg: "{{ authentik_sync_out.stdout_lines }}"

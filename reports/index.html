@@ -316,28 +316,20 @@
             letter-spacing: 0.3px;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
+        /* Warning Banner for Desync Detection */
+        .warning-banner {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+            color: #fca5a5;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        th, td {
-            text-align: left;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        th {
-            background-color: var(--table-header);
-            color: var(--text-muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        td {
-            font-size: 14px;
+        .warning-banner strong {
+            color: #ffffff;
         }
 
         .footer {
@@ -358,10 +350,14 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
-                                                                Generated on 2026-11-02 at 10:50:53 AM EST
+                
+                
+                
+                Generated on 2026-11-05 at 01:45:43 PM 
             </div>
         </div>
-                <div class="status-badge ">
+        
+        <div class="status-badge ">
             SUCCESS
         </div>
     </div>
@@ -373,19 +369,95 @@
         <a href="logs.html" class="nav-tab">Audit & System Logs</a>
     </nav>
 
+    <!-- 1. Live System Synchronization Audit -->
+    <div class="card">
+        <h2>Live System Synchronization Audit</h2>
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+
+        
+        
+
+        
+        
+        
+
+        <div class="metrics-grid" style="margin-bottom: 0;">
+            <div class="metric-card">
+                <span class="metric-label">Sync Accuracy Rate</span>
+                <span class="metric-value" style="color: var(--accent-green);">
+                    100.0%
+                </span>
+                <span class="metric-subtext">
+                    
+                        10 / 10 Users Verified
+                    
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Active Directory</span>
+                <span class="metric-value" style="color: var(--accent-blue);">
+                    5 / 5
+                </span>
+                <span class="metric-subtext" style="color: var(--accent-green);">
+                    100% Synced
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Authentik SSO</span>
+                <span class="metric-value" style="color: var(--accent-blue);">
+                    5 / 5
+                </span>
+                <span class="metric-subtext" style="color: var(--accent-green);">
+                    100% Synced
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Mismatches / Flagged</span>
+                <span class="metric-value" style="color: var(--accent-green);">
+                    0
+                </span>
+                <span class="metric-subtext">
+                    Zero Desync Errors
+                </span>
+            </div>
+        </div>
+
+        
+    </div>
+
     <!-- Parse Execution Runtime & Metrics -->
-                                                    
-    <!-- Top Operational Counts Grid -->
+    
+        
+    
+
+    
+    
+    
+    
+    
+    
+
+    <!-- 2. Operational Counts Grid -->
     <div class="metrics-grid">
         <div class="metric-card">
             <span class="metric-label">Total Events</span>
-            <span class="metric-value" style="color: var(--accent-blue);">1000</span>
+            <span class="metric-value" style="color: var(--accent-blue);">5</span>
             <span class="metric-subtext">Lifecycle Changes</span>
         </div>
         <div class="metric-card">
             <span class="metric-label">Hires / Transfers / Terms</span>
             <span class="metric-value">
-                <span style="color: var(--accent-green);">1000</span> /
+                <span style="color: var(--accent-green);">5</span> /
                 <span style="color: var(--accent-yellow);">0</span> /
                 <span style="color: var(--accent-red);">0</span>
             </span>
@@ -394,7 +466,7 @@
         <div class="metric-card">
             <span class="metric-label">Active / Disabled Accounts</span>
             <span class="metric-value">
-                <span style="color: #cbd5e1;">1000</span> /
+                <span style="color: #cbd5e1;">5</span> /
                 <span style="color: var(--accent-red);">0</span>
             </span>
             <span class="metric-subtext">AD & SSO Managed</span>
@@ -402,21 +474,23 @@
         <div class="metric-card">
             <span class="metric-label">Pipeline Runtime</span>
             <span class="metric-value" style="color: var(--accent-green);">
-                892.6 secs
+                22.6 secs
             </span>
             <span class="metric-subtext">Automated Execution</span>
         </div>
     </div>
 
-    <!-- Side-by-Side Efficiency Comparison -->
+    <!-- 3. Efficiency Comparison -->
     <div class="comparison-grid">
         <div class="comparison-card manual">
             <div class="comparison-header">
                 <span class="comparison-title">Manual SLA Baseline</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-yellow);">
-                                    15000 mins (250.0 hrs)
-                            </div>
+                
+                    75 mins (1.2 hrs)
+                
+            </div>
             <div class="comparison-desc">
                 Estimated manual effort across Active Directory, Authentik SSO, and PostgreSQL.
             </div>
@@ -427,8 +501,10 @@
                 <span class="comparison-title">Net Time Saved</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-purple);">
-                                    14985.1 mins (249.8 hrs)
-                            </div>
+                
+                    74.6 mins (1.2 hrs)
+                
+            </div>
             <div class="comparison-desc">
                 Net IT administrative overhead eliminated by the automated pipeline this run.
             </div>
@@ -439,15 +515,15 @@
                 <span class="comparison-title">Efficiency Gain</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-blue);">
-                99.9% Faster
+                99.5% Faster
             </div>
             <div class="comparison-desc">
-                ~1008x faster than manual multi-system IT workflows.
+                ~199x faster than manual multi-system IT workflows.
             </div>
         </div>
     </div>
 
-    <!-- SLA Methodology Banner -->
+    <!-- 4. SLA Methodology Banner -->
     <div class="methodology-banner">
         <div class="methodology-header">
             <span class="methodology-title">SLA & Automation Efficiency Model</span>
@@ -456,55 +532,18 @@
         <div class="formula-box">
             <span class="formula-label">Estimated Time Saved Calculation:</span>
             <div class="formula-expression">
-                <span class="formula-token">1000 events</span>
+                <span class="formula-token">5 events</span>
                 <span class="formula-op">×</span>
                 <span class="formula-token">15 mins/event baseline</span>
                 <span class="formula-op">=</span>
                 <span class="formula-result">
-                    15000 mins (250.0 hours)                </span>
+                    75 mins (1.2 hours)
+                </span>
             </div>
         </div>
         <p class="methodology-footnote">
             *<strong>Methodology Standard:</strong> Assumes an industry standard baseline requiring <strong>15 minutes of manual effort per identity event</strong> (5 mins Active Directory OU/Group provisioning + 5 mins Authentik SSO user/group mapping + 5 mins PostgreSQL HR database record update).
         </p>
-    </div>
-
-    <div class="card">
-        <h2>Downstream System Status</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Target System</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                                <tr>
-                    <td>PostgreSQL Database</td>
-                    <td>
-                        <span class="status-badge ">
-                            SUCCESS
-                        </span>
-                    </td>
-                </tr>
-                                <tr>
-                    <td>Authentik SSO</td>
-                    <td>
-                        <span class="status-badge ">
-                            SUCCESS
-                        </span>
-                    </td>
-                </tr>
-                                <tr>
-                    <td>Active Directory</td>
-                    <td>
-                        <span class="status-badge ">
-                            SUCCESS
-                        </span>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 </div>
 

@@ -128,14 +128,91 @@
             font-size: 18px;
             color: var(--text-main);
             letter-spacing: 0.3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
+        /* Remediation Exception Queue Card */
+        .remediation-card {
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .remediation-badge {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* Log Controls Bar */
+        .log-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background-color: #0b1120;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            color: var(--text-main);
+            border-color: var(--accent-blue);
+        }
+
+        .filter-btn.active {
+            background-color: var(--accent-blue);
+            color: #0f172a;
+            border-color: var(--accent-blue);
+        }
+
+        .search-input {
+            background-color: #0b1120;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            min-width: 240px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Terminal Container Scrollbox */
         .events-container {
             background-color: #0b1120;
             border: 1px solid var(--border-color);
             border-radius: 6px;
             padding: 16px;
-            overflow-x: auto;
+            max-height: 450px;
+            overflow-y: auto;
         }
 
         .events-list {
@@ -158,20 +235,10 @@
             border-bottom: none;
         }
 
-        .tag-hired {
-            color: var(--accent-green);
-            font-weight: bold;
-        }
-
-        .tag-transferred {
-            color: var(--accent-blue);
-            font-weight: bold;
-        }
-
-        .tag-terminated {
-            color: var(--accent-red);
-            font-weight: bold;
-        }
+        .tag-hired { color: var(--accent-green); font-weight: bold; }
+        .tag-transferred { color: var(--accent-yellow); font-weight: bold; }
+        .tag-terminated { color: var(--accent-red); font-weight: bold; }
+        .tag-error { color: var(--accent-red); font-weight: bold; background: rgba(239,68,68,0.15); padding: 2px 6px; border-radius: 3px; }
 
         .badge-event {
             background-color: rgba(239, 68, 68, 0.15);
@@ -225,7 +292,17 @@
             white-space: nowrap;
         }
 
-        /* Pagination Styles */
+        .code-tag {
+            font-family: "JetBrains Mono", Consolas, monospace;
+            background-color: #0b1120;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--accent-blue);
+        }
+
+        /* Audit Table Pagination Styles */
         .pagination-wrapper {
             display: flex;
             justify-content: space-between;
@@ -310,33 +387,79 @@
         <a href="logs.html" class="nav-tab active">Audit & System Logs</a>
     </nav>
 
-    <!-- Raw Event Console Stream -->
+    <!-- 1. Desync & Manual Remediation Exception Queue -->
+    {% set all_ad_mismatches = (ad_mismatch_list | default([])) + (active_ad_mismatch_list | default([])) %}
+    {% set all_ak_mismatches = (authentik_mismatch_list | default([])) + (active_authentik_mismatch_list | default([])) %}
+    {% set total_failed_users = (all_ad_mismatches + all_ak_mismatches) | unique %}
+
+    {% if total_failed_users | length > 0 %}
+    <div class="card remediation-card">
+        <h2>
+            <span>Desync & Manual Remediation Exception Queue</span>
+            <span class="remediation-badge">{{ total_failed_users | length }} Flagged Errors</span>
+        </h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 0; margin-bottom: 16px;">
+            The following managed identities failed live downstream endpoint verification and require direct IT administrative intervention.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Target System</th>
+                    <th>Failure Classification</th>
+                    <th>Remediation Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for uname in all_ad_mismatches | unique %}
+                <tr>
+                    <td><span class="code-tag">{{ uname }}</span></td>
+                    <td><strong style="color: var(--accent-yellow);">Active Directory</strong></td>
+                    <td>Missing or Disabled Account in Domain OU</td>
+                    <td><span class="remediation-badge">ACTION REQUIRED</span></td>
+                </tr>
+                {% endfor %}
+                {% for uname in all_ak_mismatches | unique %}
+                <tr>
+                    <td><span class="code-tag">{{ uname }}</span></td>
+                    <td><strong style="color: var(--accent-purple);">Authentik SSO</strong></td>
+                    <td>REST Directory Account State Mismatch</td>
+                    <td><span class="remediation-badge">ACTION REQUIRED</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- 2. Processed Lifecycle Stream (Search + Category Filter + 450px Fixed Scrollbox) -->
     <div class="card">
-        <h2>Processed Lifecycle Stream</h2>
+        <h2>
+            <span>Processed Lifecycle Stream</span>
+            <span id="logCounter" style="font-size: 12px; color: var(--text-muted); font-weight: normal;">
+                Showing 0 of 0 log entries
+            </span>
+        </h2>
+
+        <div class="log-toolbar">
+            <div class="filter-group">
+                <button class="filter-btn active" onclick="setLogFilter('ALL', this)">All Logs</button>
+                <button class="filter-btn" onclick="setLogFilter('HIRED', this)">Hires</button>
+                <button class="filter-btn" onclick="setLogFilter('TRANSFERRED', this)">Transfers</button>
+                <button class="filter-btn" onclick="setLogFilter('TERMINATED', this)">Terminations</button>
+                <button class="filter-btn" onclick="setLogFilter('ERROR', this)">Errors</button>
+            </div>
+            <input type="text" id="logSearchInput" placeholder="Filter logs (username, department)..." class="search-input" onkeyup="filterLogStream()">
+        </div>
+
         <div class="events-container">
             <ul class="events-list" id="eventsList">
-            {% if raw_events | default([]) | length > 0 %}
-                {% for event in raw_events %}
-                <li class="event-item">
-                    {% if 'HIRED' in event %}
-                        <span class="tag-hired">[+]</span> {{ event | replace('[+]', '') }}
-                    {% elif 'TRANSFERRED' in event %}
-                        <span class="tag-transferred">[*]</span> {{ event | replace('[*]', '') }}
-                    {% elif 'Offboarded' in event or 'TERMINATED' in event %}
-                        <span class="tag-terminated">[-]</span> {{ event | replace('[-]', '') }}
-                    {% else %}
-                        {{ event }}
-                    {% endif %}
-                </li>
-                {% endfor %}
-            {% else %}
-                <li>No new events generated in this cycle.</li>
-            {% endif %}
+                <!-- Rendered dynamically by JS -->
             </ul>
         </div>
     </div>
 
-    <!-- Detailed Account Deprovisioning Audit Table -->
+    <!-- 3. Detailed Account Deprovisioning Audit Table -->
     <div class="card">
         <h2>Account Deprovisioning Audit Trail</h2>
         <table id="auditTable">
@@ -351,15 +474,15 @@
                 </tr>
             </thead>
             <tbody>
-                {% if audit_logs | default([]) | length > 0 %}
-                    {% for log in audit_logs %}
+                {% if dynamic_inactive_users is defined and dynamic_inactive_users | length > 0 %}
+                    {% for u in dynamic_inactive_users %}
                     <tr class="table-row">
-                        <td class="td-nowrap">{{ (log.timestamp | string | replace('T', ' '))[:19] if log.timestamp is defined else 'N/A' }}</td>
-                        <td class="td-nowrap"><code>{{ log.username | default('N/A') }}</code></td>
-                        <td class="td-nowrap"><span class="badge-event">{{ log.event_type | default('ACCOUNT_DEPROVISION') }}</span></td>
-                        <td>{{ log.details | default('Account disabled and access revoked across AD, Authentik, and PostgreSQL') }}</td>
-                        <td class="td-nowrap">{{ log.executed_by | default('Ansible Pipeline') }}</td>
-                        <td class="td-nowrap"><span class="badge-status-success">{{ log.status | default('SUCCESS') }}</span></td>
+                        <td class="td-nowrap">{{ u.terminated_at | default('N/A') }}</td>
+                        <td class="td-nowrap"><span class="code-tag">{{ u.username }}</span></td>
+                        <td class="td-nowrap"><span class="badge-event">TERMINATION</span></td>
+                        <td>Account disabled and access revoked across AD, Authentik, and PostgreSQL</td>
+                        <td class="td-nowrap">Ansible Pipeline</td>
+                        <td class="td-nowrap"><span class="badge-status-success">COMPLETED</span></td>
                     </tr>
                     {% endfor %}
                 {% else %}
@@ -372,15 +495,13 @@
             </tbody>
         </table>
 
-        {% if audit_logs | default([]) | length > 0 %}
-        <div class="pagination-wrapper">
+        <div class="pagination-wrapper" id="auditPaginationWrapper" style="display: none;">
             <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
             <div class="pagination-controls" id="paginationControls"></div>
         </div>
-        {% endif %}
     </div>
 
-    <!-- Pipeline System Telemetry -->
+    <!-- 4. Pipeline System Telemetry -->
     <div class="card">
         <h2>Pipeline Execution Telemetry</h2>
         <table>
@@ -430,78 +551,146 @@
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const rowsPerPage = 10;
-    const tableBody = document.querySelector("#auditTable tbody");
-    if (!tableBody) return;
+    const rawLogData = {{ raw_events | default([]) | to_json }};
+    let activeLogCategory = 'ALL';
 
-    const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
-    const totalRows = rows.length;
+    function renderLogStream() {
+        const eventsList = document.getElementById('eventsList');
+        const searchVal = document.getElementById('logSearchInput').value.toLowerCase();
+        const logCounter = document.getElementById('logCounter');
 
-    if (totalRows === 0) return;
+        if (!rawLogData || rawLogData.length === 0) {
+            eventsList.innerHTML = '<li style="color: var(--text-muted); text-align: center;">No new events generated in this cycle.</li>';
+            logCounter.innerText = 'Showing 0 of 0 log entries';
+            return;
+        }
 
-    let currentPage = 1;
-    const totalPages = Math.ceil(totalRows / rowsPerPage);
+        const filtered = rawLogData.filter(line => {
+            const lineUpper = line.toUpperCase();
+            let matchesCategory = true;
 
-    function displayPage(page) {
-        currentPage = page;
-        const start = (page - 1) * rowsPerPage;
-        const end = start + rowsPerPage;
+            if (activeLogCategory === 'HIRED') matchesCategory = lineUpper.includes('HIRED:');
+            else if (activeLogCategory === 'TRANSFERRED') matchesCategory = lineUpper.includes('TRANSFERRED:');
+            else if (activeLogCategory === 'TERMINATED') matchesCategory = lineUpper.includes('TERMINATED:') || lineUpper.includes('OFFBOARDED:');
+            else if (activeLogCategory === 'ERROR') matchesCategory = lineUpper.includes('ERROR') || lineUpper.includes('FAILED') || lineUpper.includes('EXCEPTION');
 
-        rows.forEach((row, index) => {
-            if (index >= start && index < end) {
-                row.style.display = "";
-            } else {
-                row.style.display = "none";
-            }
+            const matchesSearch = line.toLowerCase().includes(searchVal);
+            return matchesCategory && matchesSearch;
         });
 
-        const currentEnd = Math.min(end, totalRows);
-        const infoElem = document.getElementById("paginationInfo");
-        if (infoElem) {
-            infoElem.innerText = `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+        if (filtered.length === 0) {
+            eventsList.innerHTML = '<li style="color: var(--text-muted); text-align: center;">No log entries match the selected filter or search query.</li>';
+        } else {
+            eventsList.innerHTML = filtered.map(line => {
+                let tagHtml = '';
+                let cleanLine = escapeHtml(line);
+
+                if (line.includes('HIRED:')) {
+                    tagHtml = '<span class="tag-hired">[+]</span> ';
+                    cleanLine = cleanLine.replace('[+]', '');
+                } else if (line.includes('TRANSFERRED:')) {
+                    tagHtml = '<span class="tag-transferred">[*]</span> ';
+                    cleanLine = cleanLine.replace('[*]', '');
+                } else if (line.includes('TERMINATED:') || line.includes('Offboarded')) {
+                    tagHtml = '<span class="tag-terminated">[-]</span> ';
+                    cleanLine = cleanLine.replace('[-]', '');
+                } else if (line.includes('ERROR') || line.includes('FAILED')) {
+                    tagHtml = '<span class="tag-error">[!]</span> ';
+                }
+
+                return `<li>${tagHtml}${cleanLine}</li>`;
+            }).join('');
         }
 
-        renderControls();
+        logCounter.innerText = `Showing ${filtered.length} of ${rawLogData.length} log entries`;
     }
 
-    function renderControls() {
-        const controlsContainer = document.getElementById("paginationControls");
-        if (!controlsContainer) return;
-
-        controlsContainer.innerHTML = "";
-
-        const prevBtn = document.createElement("button");
-        prevBtn.className = "page-btn";
-        prevBtn.innerText = "‹ Prev";
-        prevBtn.disabled = currentPage === 1;
-        prevBtn.onclick = () => displayPage(currentPage - 1);
-        controlsContainer.appendChild(prevBtn);
-
-        let startPage = Math.max(1, currentPage - 2);
-        let endPage = Math.min(totalPages, startPage + 4);
-        if (endPage - startPage < 4) {
-            startPage = Math.max(1, endPage - 4);
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            const pageBtn = document.createElement("button");
-            pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-            pageBtn.innerText = i;
-            pageBtn.onclick = () => displayPage(i);
-            controlsContainer.appendChild(pageBtn);
-        }
-
-        const nextBtn = document.createElement("button");
-        nextBtn.className = "page-btn";
-        nextBtn.innerText = "Next ›";
-        nextBtn.disabled = currentPage === totalPages;
-        nextBtn.onclick = () => displayPage(currentPage + 1);
-        controlsContainer.appendChild(nextBtn);
+    function setLogFilter(category, btnElem) {
+        activeLogCategory = category;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        btnElem.classList.add('active');
+        renderLogStream();
     }
 
-    displayPage(1);
-});
+    function filterLogStream() {
+        renderLogStream();
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    /* Deprovisioning Audit Table Client-Side Pagination */
+    document.addEventListener("DOMContentLoaded", function() {
+        renderLogStream();
+
+        const rowsPerPage = 10;
+        const tableBody = document.querySelector("#auditTable tbody");
+        if (!tableBody) return;
+
+        const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
+        const totalRows = rows.length;
+
+        if (totalRows === 0) return;
+
+        document.getElementById("auditPaginationWrapper").style.display = "flex";
+        let currentPage = 1;
+        const totalPages = Math.ceil(totalRows / rowsPerPage);
+
+        function displayPage(page) {
+            currentPage = page;
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+
+            rows.forEach((row, index) => {
+                row.style.display = (index >= start && index < end) ? "" : "none";
+            });
+
+            const currentEnd = Math.min(end, totalRows);
+            const infoElem = document.getElementById("paginationInfo");
+            if (infoElem) {
+                infoElem.innerText = `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+            }
+
+            renderControls();
+        }
+
+        function renderControls() {
+            const controlsContainer = document.getElementById("paginationControls");
+            if (!controlsContainer) return;
+            controlsContainer.innerHTML = "";
+
+            const prevBtn = document.createElement("button");
+            prevBtn.className = "page-btn";
+            prevBtn.innerText = "‹ Prev";
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => displayPage(currentPage - 1);
+            controlsContainer.appendChild(prevBtn);
+
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement("button");
+                pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                pageBtn.innerText = i;
+                pageBtn.onclick = () => displayPage(i);
+                controlsContainer.appendChild(pageBtn);
+            }
+
+            const nextBtn = document.createElement("button");
+            nextBtn.className = "page-btn";
+            nextBtn.innerText = "Next ›";
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.onclick = () => displayPage(currentPage + 1);
+            controlsContainer.appendChild(nextBtn);
+        }
+
+        displayPage(1);
+    });
 </script>
 
 </body>

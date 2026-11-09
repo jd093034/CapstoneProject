@@ -8,15 +8,20 @@
   vars_files:
     - /root/ansible/vars/vault.yml
 
+  vars:
+    db_host: "10.2.8.106"
+    db_port: 5432
+    db_name: "hr_db"
+
   tasks:
     # -------------------------------------------------------------------------
-    # 1. PostgreSQL Cleanup (Bulk Truncate)
+    # 1. PostgreSQL Cleanup (Bulk Truncate - Instant)
     # -------------------------------------------------------------------------
     - name: Purge PostgreSQL HR database tables
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
         login_host: "{{ db_host }}"
-        login_port: "{{ db_port | default(5432) }}"
+        login_port: "{{ db_port }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
         query: |
@@ -35,89 +40,119 @@
           END $$;
 
     # -------------------------------------------------------------------------
-    # 2. Authentik Cleanup (Asynchronous Concurrent HTTP Requests)
+    # 2. Authentik Bulk Cleanup (Active & Disabled User States)
     # -------------------------------------------------------------------------
-    - name: Fetch all non-system users from Authentik (Page Size 5000)
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=5000"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: [200]
-        validate_certs: false
-        timeout: 30
-      register: authentik_users
+    - name: Bulk purge non-system users from Authentik
+      ansible.builtin.command:
+        cmd: |
+          python3 -c "
+          import urllib.request, json, ssl, time
+          from concurrent.futures import ThreadPoolExecutor
 
-    - name: Delete non-system users from Authentik (Async Parallel)
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item.pk }}/"
-        method: DELETE
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-        status_code: [204, 404]
-        validate_certs: false
-        timeout: 15
-      loop: "{{ authentik_users.json.results | default([]) }}"
-      loop_control:
-        label: "{{ item.username }}"
-      when: 
-        - item.username not in ['akadmin', 'anonymous']
-        - not item.username.startswith('ak-outpost-')
-      async: 120
-      poll: 0
-      register: async_user_deletes
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
 
-    - name: Fetch custom groups from Authentik (Page Size 5000)
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/?page_size=5000"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-          Accept: "application/json"
-        status_code: [200]
-        validate_certs: false
-        timeout: 30
-      register: authentik_groups
+          headers = {
+              'Authorization': 'Bearer {{ vault_authentik_token }}',
+              'Content-Type': 'application/json'
+          }
 
-    - name: Delete custom department groups from Authentik (Async Parallel)
-      ansible.builtin.uri:
-        url: "{{ vault_authentik_url }}/api/v3/core/groups/{{ item.pk }}/"
-        method: DELETE
-        headers:
-          Authorization: "Bearer {{ vault_authentik_token }}"
-        status_code: [204, 404]
-        validate_certs: false
-        timeout: 15
-      loop: "{{ authentik_groups.json.results | default([]) }}"
-      loop_control:
-        label: "{{ item.name }}"
-      when: 
-        - item.is_superuser == false 
-        - item.name not in ['authentik Admins']
-      async: 120
-      poll: 0
-      register: async_group_deletes
+          users = []
+          system_accounts = {'akadmin', 'anonymous'}
 
-    - name: Wait for Authentik async user deletions to complete
-      ansible.builtin.async_status:
-        jid: "{{ item.ansible_job_id }}"
-      loop: "{{ async_user_deletes.results | default([]) }}"
-      when: item.ansible_job_id is defined
-      register: async_user_results
-      until: async_user_results.finished
-      retries: 60
-      delay: 2
+          # Explicitly query both active and disabled user states across paginated results
+          for active_flag in ['true', 'false']:
+              page = 1
+              while True:
+                  url = f'{{ vault_authentik_url }}/api/v3/core/users/?is_active={active_flag}&page={page}&page_size=1000'
+                  req = urllib.request.Request(url, headers=headers)
+                  try:
+                      with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                          data = json.loads(resp.read().decode())
+                          results = data.get('results', [])
+                          users.extend(results)
+                          if not data.get('pagination', {}).get('next'):
+                              break
+                          page += 1
+                  except Exception as e:
+                      print(f'User page {page} fetch failed (is_active={active_flag}): {e}')
+                      break
 
-    - name: Wait for Authentik async group deletions to complete
-      ansible.builtin.async_status:
-        jid: "{{ item.ansible_job_id }}"
-      loop: "{{ async_group_deletes.results | default([]) }}"
-      when: item.ansible_job_id is defined
-      register: async_group_results
-      until: async_group_results.finished
-      retries: 60
-      delay: 2
+          to_delete = list({
+              u['pk'] for u in users 
+              if u.get('username') not in system_accounts 
+              and not u.get('username', '').startswith('ak-outpost-')
+          })
+
+          def delete_user(pk):
+              url = f'{{ vault_authentik_url }}/api/v3/core/users/{pk}/'
+              del_req = urllib.request.Request(url, headers=headers, method='DELETE')
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(del_req, context=ctx, timeout=15) as resp:
+                          return
+                  except Exception:
+                      time.sleep(0.3)
+
+          with ThreadPoolExecutor(max_workers=25) as executor:
+              executor.map(delete_user, to_delete)
+          "
+
+    - name: Bulk purge custom groups from Authentik
+      ansible.builtin.command:
+        cmd: |
+          python3 -c "
+          import urllib.request, json, ssl, time
+          from concurrent.futures import ThreadPoolExecutor
+
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+
+          headers = {
+              'Authorization': 'Bearer {{ vault_authentik_token }}',
+              'Content-Type': 'application/json'
+          }
+
+          groups = []
+          page = 1
+
+          # Fetch groups in 1,000-chunk pages to avoid payload timeouts
+          while True:
+              url = f'{{ vault_authentik_url }}/api/v3/core/groups/?page={page}&page_size=1000'
+              req = urllib.request.Request(url, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                      data = json.loads(resp.read().decode())
+                      results = data.get('results', [])
+                      groups.extend(results)
+                      if not data.get('pagination', {}).get('next'):
+                          break
+                      page += 1
+              except Exception as e:
+                  print(f'Group page {page} fetch failed: {e}')
+                  break
+
+          to_delete = [
+              g['pk'] for g in groups 
+              if not g.get('is_superuser') 
+              and g.get('name') not in ['authentik Admins']
+          ]
+
+          def delete_group(pk):
+              url = f'{{ vault_authentik_url }}/api/v3/core/groups/{pk}/'
+              del_req = urllib.request.Request(url, headers=headers, method='DELETE')
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(del_req, context=ctx, timeout=15) as resp:
+                          return
+                  except Exception:
+                      time.sleep(0.3)
+
+          with ThreadPoolExecutor(max_workers=25) as executor:
+              executor.map(delete_group, to_delete)
+          "
 
     # -------------------------------------------------------------------------
     # 3. Local Dashboard Dynamic State JSON Reset
@@ -130,10 +165,12 @@
       loop:
         - /tmp/dynamic_ad_users.json
         - /tmp/dynamic_inactive_users.json
+        - /tmp/dynamic_ad_group_assignments.json
+        - /tmp/dynamic_user_group_assignments.json
       ignore_errors: true
 
 # =============================================================================
-# Play 2: Active Directory Cleanup (Single-Session Bulk PowerShell)
+# Play 2: Active Directory Cleanup (Single-Session Bulk Array Purge)
 # =============================================================================
 - name: Environment Reset - Wipe Active Directory
   hosts: win_dc
@@ -142,9 +179,6 @@
     - /root/ansible/vars/vault.yml
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 4. Active Directory Bulk Deletion via WinRM Scripting
-    # -------------------------------------------------------------------------
     - name: Bulk remove non-system active & disabled users from AD
       ansible.windows.win_powershell:
         script: |
@@ -156,21 +190,27 @@
           )
 
           foreach ($base in $SearchBases) {
-              Get-ADUser -Filter * -SearchBase $base -SearchScope Subtree -ErrorAction SilentlyContinue | 
-                Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
-                Remove-ADUser -Confirm:$false
+              $users = Get-ADUser -Filter * -SearchBase $base -SearchScope Subtree -ErrorAction SilentlyContinue | 
+                Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" }
+              
+              if ($users) {
+                  $users | Remove-ADUser -Confirm:$false -ErrorAction SilentlyContinue
+              }
           }
 
     - name: Bulk remove department security groups from AD
       ansible.windows.win_powershell:
         script: |
           $Excluding = @('Domain Admins', 'Domain Users', 'Domain Guests', 'Enterprise Admins', 'Schema Admins')
-          Get-ADGroup -Filter * -SearchBase "OU=APEX Lab,DC=apex,DC=lab" -SearchScope Subtree -ErrorAction SilentlyContinue | 
-            Where-Object { $Excluding -notcontains $_.Name } | 
-            Remove-ADGroup -Confirm:$false
+          $groups = Get-ADGroup -Filter * -SearchBase "OU=APEX Lab,DC=apex,DC=lab" -SearchScope Subtree -ErrorAction SilentlyContinue | 
+            Where-Object { $Excluding -notcontains $_.Name }
+          
+          if ($groups) {
+              $groups | Remove-ADGroup -Confirm:$false -ErrorAction SilentlyContinue
+          }
 
 # =============================================================================
-# Play 3: Reset Web Dashboard Reports
+# Play 3: Reset Web Dashboard Reports (Direct Local Publish)
 # =============================================================================
 - name: Environment Reset - Publish Clean Slate Web Dashboard
   hosts: localhost
@@ -179,16 +219,10 @@
     - /root/ansible/vars/vault.yml
 
   tasks:
-    - name: Ensure reports directory exists locally
-      ansible.builtin.file:
-        path: "/root/ansible/reports"
-        state: directory
-        mode: '0755'
-
-    - name: Render Reset Multi-Page HTML Reports locally
+    - name: Render and publish reset HTML reports directly to Nginx web root
       ansible.builtin.template:
         src: "/root/ansible/templates/{{ item.src }}"
-        dest: "/root/ansible/reports/{{ item.dest }}"
+        dest: "/var/www/html/{{ item.dest }}"
         mode: '0644'
       loop:
         - { src: "index.html.j2", dest: "index.html" }
@@ -213,18 +247,6 @@
         total_events: 0
         total_active_managed: 0
         est_time_saved_mins: 0
-
-    - name: Publish Reset HTML Reports to Nginx web root on 10.2.8.68
-      ansible.builtin.copy:
-        src: "/root/ansible/reports/"
-        dest: "/var/www/html/"
-        mode: '0644'
-      delegate_to: 10.2.8.68
-      vars:
-        ansible_connection: ssh
-        ansible_port: 22
-        ansible_user: "{{ vault_ssh_user }}"
-        ansible_password: "{{ vault_ssh_password }}"
 
     - name: Reset confirmation message
       ansible.builtin.debug:

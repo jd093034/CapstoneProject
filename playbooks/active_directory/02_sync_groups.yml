@@ -6,31 +6,39 @@
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
-    - name: Ensure Security Groups exist inside Departments OU
-      microsoft.ad.group:
-        domain_username: "{{ vault_ad_admin_user }}"
-        domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ ad_hostname | default(ansible_host) }}"
-        name: "{{ item.group }}"
-        scope: global
-        category: security
-        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
-        state: present
-      loop: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_group_assignments.json', errors='ignore') | default('[]', true) | from_json }}"
-      loop_control:
-        label: "{{ item.group }}"
+    - name: Push group assignments JSON payload to Windows DC
+      ansible.windows.win_copy:
+        src: /tmp/dynamic_ad_group_assignments.json
+        dest: C:\Windows\Temp\dynamic_ad_group_assignments.json
 
-    - name: Update group member assignments in Active Directory
-      microsoft.ad.group:
-        domain_username: "{{ vault_ad_admin_user }}"
-        domain_password: "{{ vault_ad_admin_password }}"
-        domain_server: "{{ ad_hostname | default(ansible_host) }}"
-        name: "{{ item.group }}"
-        path: "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
-        members:
-          add: "{{ item.members.add }}"
-        state: present
-      loop: "{{ lookup('ansible.builtin.file', '/tmp/dynamic_ad_group_assignments.json', errors='ignore') | default('[]', true) | from_json }}"
-      when: item.members is defined and item.members.add is defined and (item.members.add | length > 0)
-      loop_control:
-        label: "{{ item.group }}"
+    - name: Bulk process AD group creation and membership in single PowerShell session
+      ansible.windows.win_powershell:
+        script: |
+          $GroupPath = "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
+          $JsonPath = "C:\Windows\Temp\dynamic_ad_group_assignments.json"
+
+          if (Test-Path $JsonPath) {
+              $GroupData = Get-Content $JsonPath | ConvertFrom-Json
+
+              # 1. Cache existing groups in 1 single LDAP query
+              $ExistingGroups = @{}
+              Get-ADGroup -Filter * -SearchBase $GroupPath -ErrorAction SilentlyContinue | 
+                ForEach-Object { $ExistingGroups[$_.Name] = $_ }
+
+              # 2. Create missing groups
+              foreach ($item in $GroupData) {
+                  $groupName = $item.group
+                  if (-not $ExistingGroups.ContainsKey($groupName)) {
+                      New-ADGroup -Name $groupName -GroupScope Global -GroupCategory Security -Path $GroupPath -ErrorAction SilentlyContinue
+                  }
+              }
+
+              # 3. Bulk append group members
+              foreach ($item in $GroupData) {
+                  $groupName = $item.group
+                  if ($item.members -and $item.members.add -and $item.members.add.Count -gt 0) {
+                      # Add-ADGroupMember accepts arrays directly
+                      Add-ADGroupMember -Identity $groupName -Members $item.members.add -ErrorAction SilentlyContinue
+                  }
+              }
+          }

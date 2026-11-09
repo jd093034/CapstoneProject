@@ -46,6 +46,32 @@
           WHERE status = 'TERMINATED';
       register: inactive_hr_users
 
+    - name: Query User-to-Group Mappings from PostgreSQL
+      community.postgresql.postgresql_query:
+        login_host: "{{ db_host }}"
+        login_port: "{{ db_port }}"
+        login_db: "{{ db_name }}"
+        login_user: "{{ vault_db_user }}"
+        login_password: "{{ vault_db_password }}"
+        query: |
+          SELECT department AS group, json_agg(username) AS members
+          FROM employees
+          WHERE status = 'ACTIVE' AND department IS NOT NULL AND department != ''
+          GROUP BY department;
+      register: group_mappings
+
+    - name: Map PostgreSQL rows into dynamic pipeline facts
+      ansible.builtin.set_fact:
+        ad_group_assignments: >-
+          [
+            {% for row in group_mappings.query_result %}
+            {
+              "group": "{{ row.group }}",
+              "members": { "add": {{ row.members | to_json }} }
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+          ]
+
     - name: Save active users JSON payload
       ansible.builtin.copy:
         content: "{{ {'dynamic_ad_users': active_hr_users.query_result} | to_nice_json }}"
@@ -56,6 +82,18 @@
       ansible.builtin.copy:
         content: "{{ {'dynamic_inactive_users': inactive_hr_users.query_result} | to_nice_json }}"
         dest: "/tmp/dynamic_inactive_users.json"
+        mode: '0644'
+
+    - name: Save group assignments JSON payload for AD sync
+      ansible.builtin.copy:
+        content: "{{ ad_group_assignments | to_nice_json }}"
+        dest: "/tmp/dynamic_ad_group_assignments.json"
+        mode: '0644'
+
+    - name: Save user group assignments JSON payload (legacy alias)
+      ansible.builtin.copy:
+        content: "{{ ad_group_assignments | to_nice_json }}"
+        dest: "/tmp/dynamic_user_group_assignments.json"
         mode: '0644'
 
 

@@ -124,6 +124,59 @@
             letter-spacing: 0.3px;
         }
 
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background-color: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .metric-title {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .metric-sub {
+            font-size: 12px;
+            color: var(--accent-green);
+        }
+
+        /* Warning Banner */
+        .warning-banner {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: #fca5a5;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .warning-banner strong {
+            color: #ffffff;
+        }
+
         .badge-ou {
             background-color: rgba(148, 163, 184, 0.12);
             color: var(--text-muted);
@@ -251,6 +304,68 @@
         <a href="logs.html" class="nav-tab">Audit & System Logs</a>
     </nav>
 
+    <!-- Multi-System Sync Reconciliation Audit Section -->
+    <div class="card">
+        <h2>Live System Synchronization Audit</h2>
+
+        {% set total_active_count = active_users_list | default([]) | length %}
+        {% set target_active = total_target_active | default(total_active_count) %}
+        {% set accuracy = active_sync_accuracy_rate | default(100.0) %}
+        {% set mismatches_cnt = total_active_mismatches | default(0) %}
+        {% set ad_synced = ad_active_synced_count | default(target_active) %}
+        {% set authentik_synced = authentik_active_synced_count | default(target_active) %}
+        {% set ad_bad = ad_active_mismatches | default(0) %}
+        {% set ak_bad = authentik_active_mismatches | default(0) %}
+
+        <!-- Reconciled Probe Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-title">Sync Accuracy Rate</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-green)' if accuracy == 100.0 else 'var(--accent-yellow)' }};">
+                    {{ accuracy }}%
+                </span>
+                <span class="metric-sub" style="color: var(--text-muted);">
+                    {{ total_active_verified_matches | default(target_active * 2) }} / {{ total_active_probes_conducted | default(target_active * 2) }} Users Verified
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Active Directory</span>
+                <span class="metric-value">{{ ad_synced }} / {{ target_active }}</span>
+                <span class="metric-sub" style="color: {{ 'var(--accent-green)' if ad_bad == 0 else 'var(--accent-red)' }};">
+                    {{ '100% Synced' if ad_bad == 0 else ad_bad ~ ' Mismatches' }}
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Authentik SSO</span>
+                <span class="metric-value">{{ authentik_synced }} / {{ target_active }}</span>
+                <span class="metric-sub" style="color: {{ 'var(--accent-green)' if ak_bad == 0 else 'var(--accent-red)' }};">
+                    {{ '100% Synced' if ak_bad == 0 else ak_bad ~ ' Mismatches' }}
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-title">Mismatches / Flagged</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-green)' if mismatches_cnt == 0 else 'var(--accent-red)' }};">
+                    {{ mismatches_cnt }}
+                </span>
+                <span class="metric-sub" style="color: var(--text-muted);">
+                    {{ 'Zero Desync Errors' if mismatches_cnt == 0 else 'Action Required' }}
+                </span>
+            </div>
+        </div>
+
+        {% if mismatches_cnt > 0 %}
+        <div class="warning-banner">
+            <strong>Sync Verification Warning:</strong> Detected {{ mismatches_cnt }} desynchronized active identity endpoint state(s).
+            {% if active_authentik_mismatch_list is defined and active_authentik_mismatch_list | length > 0 %}
+                <br/>• <strong>Authentik SSO Missing / Inactive:</strong> {{ active_authentik_mismatch_list | join(', ') }}
+            {% endif %}
+            {% if active_ad_mismatch_list is defined and active_ad_mismatch_list | length > 0 %}
+                <br/>• <strong>Active Directory Missing / Disabled:</strong> {{ active_ad_mismatch_list | join(', ') }}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
     <div class="card">
         <h2>Active Managed Employees</h2>
         <table id="activeTable">
@@ -269,9 +384,9 @@
                     <tr class="table-row">
                         <td class="td-nowrap"><code>{{ u.username | default('N/A') }}</code></td>
                         <td class="td-nowrap">
-                            {% if u.first_name is defined and u.last_name is defined %}
+                            {% if u.first_name is defined and u.last_name is defined and u.first_name and u.last_name and u.first_name != 'None' and u.last_name != 'None' %}
                                 {{ u.first_name }} {{ u.last_name }}
-                            {% elif u.name is defined %}
+                            {% elif u.name is defined and u.name and u.name != 'None' %}
                                 {{ u.name }}
                             {% else %}
                                 {{ u.username | default('N/A') }}
@@ -309,6 +424,8 @@
 document.addEventListener("DOMContentLoaded", function() {
     const rowsPerPage = 10;
     const tableBody = document.querySelector("#activeTable tbody");
+    if (!tableBody) return;
+
     const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
     const totalRows = rows.length;
     
@@ -330,19 +447,21 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
 
-        // Update Info Text
         const currentEnd = Math.min(end, totalRows);
-        document.getElementById("paginationInfo").innerText = 
-            `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+        const infoElem = document.getElementById("paginationInfo");
+        if (infoElem) {
+            infoElem.innerText = `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
+        }
 
         renderControls();
     }
 
     function renderControls() {
         const controlsContainer = document.getElementById("paginationControls");
+        if (!controlsContainer) return;
+
         controlsContainer.innerHTML = "";
 
-        // Previous Button
         const prevBtn = document.createElement("button");
         prevBtn.className = "page-btn";
         prevBtn.innerText = "‹ Prev";
@@ -350,7 +469,6 @@ document.addEventListener("DOMContentLoaded", function() {
         prevBtn.onclick = () => displayPage(currentPage - 1);
         controlsContainer.appendChild(prevBtn);
 
-        // Page Number Buttons (Maximum 5 visible for clean layout)
         let startPage = Math.max(1, currentPage - 2);
         let endPage = Math.min(totalPages, startPage + 4);
         if (endPage - startPage < 4) {
@@ -365,7 +483,6 @@ document.addEventListener("DOMContentLoaded", function() {
             controlsContainer.appendChild(pageBtn);
         }
 
-        // Next Button
         const nextBtn = document.createElement("button");
         nextBtn.className = "page-btn";
         nextBtn.innerText = "Next ›";
@@ -374,7 +491,6 @@ document.addEventListener("DOMContentLoaded", function() {
         controlsContainer.appendChild(nextBtn);
     }
 
-    // Initialize Page 1
     displayPage(1);
 });
 </script>

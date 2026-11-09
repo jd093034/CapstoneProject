@@ -316,28 +316,20 @@
             letter-spacing: 0.3px;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
+        /* Warning Banner for Desync Detection */
+        .warning-banner {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+            color: #fca5a5;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        th, td {
-            text-align: left;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        th {
-            background-color: var(--table-header);
-            color: var(--text-muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        td {
-            font-size: 14px;
+        .warning-banner strong {
+            color: #ffffff;
         }
 
         .footer {
@@ -377,14 +369,104 @@
         <a href="logs.html" class="nav-tab">Audit & System Logs</a>
     </nav>
 
+    <!-- 1. Live System Synchronization Audit -->
+    <div class="card">
+        <h2>Live System Synchronization Audit</h2>
+
+        {% set disabled_mismatches = total_mismatches | default(0) | int %}
+        {% set active_mismatches = total_active_mismatches | default(0) | int %}
+        {% set total_mismatches_cnt = disabled_mismatches + active_mismatches %}
+        
+        {% set ad_mismatches_total = (ad_mismatches | default(0) | int) + (ad_active_mismatches | default(0) | int) %}
+        {% set ak_mismatches_total = (authentik_mismatches | default(0) | int) + (authentik_active_mismatches | default(0) | int) %}
+        
+        {% set target_active = total_target_active | default(total_active_managed | default(0)) | int %}
+        {% set target_terms = total_target_terms | default(dynamic_inactive_users | default([]) | length) | int %}
+        {% set total_target = target_active + target_terms %}
+
+        {% set ad_synced_total = (ad_active_synced_count | default(target_active) | int) + (ad_synced_count | default(target_terms) | int) %}
+        {% set ak_synced_total = (authentik_active_synced_count | default(target_active) | int) + (authentik_synced_count | default(target_terms) | int) %}
+
+        {% set total_probes_all = (total_active_probes_conducted | default(0) | int) + (total_probes_conducted | default(0) | int) %}
+        {% set total_verified_all = (total_active_verified_matches | default(0) | int) + (total_verified_matches | default(0) | int) %}
+        {% set accuracy = overall_sync_accuracy_rate | default(100.0) %}
+
+        <div class="metrics-grid" style="margin-bottom: 0;">
+            <div class="metric-card">
+                <span class="metric-label">Sync Accuracy Rate</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-green)' if accuracy == 100.0 else 'var(--accent-yellow)' }};">
+                    {{ accuracy }}%
+                </span>
+                <span class="metric-subtext">
+                    {% if total_probes_all > 0 %}
+                        {{ total_verified_all }} / {{ total_probes_all }} Users Verified
+                    {% else %}
+                        All Managed Endpoints
+                    {% endif %}
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Active Directory</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-blue)' if ad_mismatches_total == 0 else 'var(--accent-red)' }};">
+                    {{ ad_synced_total }} / {{ total_target }}
+                </span>
+                <span class="metric-subtext" style="color: {{ 'var(--accent-green)' if ad_mismatches_total == 0 else 'var(--accent-red)' }};">
+                    {{ '100% Synced' if ad_mismatches_total == 0 else ad_mismatches_total ~ ' Mismatches' }}
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Authentik SSO</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-blue)' if ak_mismatches_total == 0 else 'var(--accent-red)' }};">
+                    {{ ak_synced_total }} / {{ total_target }}
+                </span>
+                <span class="metric-subtext" style="color: {{ 'var(--accent-green)' if ak_mismatches_total == 0 else 'var(--accent-red)' }};">
+                    {{ '100% Synced' if ak_mismatches_total == 0 else ak_mismatches_total ~ ' Mismatches' }}
+                </span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Mismatches / Flagged</span>
+                <span class="metric-value" style="color: {{ 'var(--accent-green)' if total_mismatches_cnt == 0 else 'var(--accent-red)' }};">
+                    {{ total_mismatches_cnt }}
+                </span>
+                <span class="metric-subtext">
+                    {{ 'Zero Desync Errors' if total_mismatches_cnt == 0 else 'Endpoint Desync Detected' }}
+                </span>
+            </div>
+        </div>
+
+        {% if total_mismatches_cnt > 0 %}
+        <div class="warning-banner">
+            <strong>Sync Verification Warning:</strong> Detected {{ total_mismatches_cnt }} desynchronized endpoint state(s) across Active & Disabled accounts.
+            {% if authentik_mismatch_list is defined and authentik_mismatch_list | length > 0 %}
+                <br/>
+                <strong>Authentik SSO Disabled Mismatches:</strong> {{ authentik_mismatch_list | join(', ') }}
+            {% endif %}
+            {% if ad_mismatch_list is defined and ad_mismatch_list | length > 0 %}
+                <br/>
+                <strong>Active Directory Disabled Mismatches:</strong> {{ ad_mismatch_list | join(', ') }}
+            {% endif %}
+            {% if active_authentik_mismatch_list is defined and active_authentik_mismatch_list | length > 0 %}
+                <br/>
+                <strong>Authentik SSO Active Mismatches:</strong> {{ active_authentik_mismatch_list | join(', ') }}
+            {% endif %}
+            {% if active_ad_mismatch_list is defined and active_ad_mismatch_list | length > 0 %}
+                <br/>
+                <strong>Active Directory Active Mismatches:</strong> {{ active_ad_mismatch_list | join(', ') }}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Parse Execution Runtime & Metrics -->
-    {% set raw_delta = sync_result.delta | default('0:00:12.000000') %}
-    {% if ':' in raw_delta %}
-        {% set delta_parts = raw_delta.split(':') %}
+    {% if auto_secs is defined and auto_secs | float > 0 %}
+        {% set auto_secs = auto_secs | float %}
+    {% elif sync_result is defined and sync_result.delta is defined and ':' in (sync_result.delta | string) %}
+        {% set delta_parts = sync_result.delta.split(':') %}
         {% set auto_secs = (delta_parts[0] | int * 3600) + (delta_parts[1] | int * 60) + (delta_parts[2] | float) %}
     {% else %}
         {% set auto_secs = 12.0 %}
     {% endif %}
+
     {% set manual_mins = est_time_saved_mins | int | default(0) %}
     {% set manual_secs = manual_mins * 60 %}
     {% set net_saved_secs = manual_secs - auto_secs if manual_secs > auto_secs else 0 %}
@@ -392,7 +474,7 @@
     {% set speedup_factor = (manual_secs / auto_secs) | round(0) | int if auto_secs > 0 else 300 %}
     {% set pct_reduction = (((manual_secs - auto_secs) / manual_secs) * 100) | round(1) if manual_secs > 0 else 99.5 %}
 
-    <!-- Top Operational Counts Grid -->
+    <!-- 2. Operational Counts Grid -->
     <div class="metrics-grid">
         <div class="metric-card">
             <span class="metric-label">Total Events</span>
@@ -425,7 +507,7 @@
         </div>
     </div>
 
-    <!-- Side-by-Side Efficiency Comparison -->
+    <!-- 3. Efficiency Comparison -->
     <div class="comparison-grid">
         <div class="comparison-card manual">
             <div class="comparison-header">
@@ -472,7 +554,7 @@
         </div>
     </div>
 
-    <!-- SLA Methodology Banner -->
+    <!-- 4. SLA Methodology Banner -->
     <div class="methodology-banner">
         <div class="methodology-header">
             <span class="methodology-title">SLA & Automation Efficiency Model</span>
@@ -493,47 +575,6 @@
         <p class="methodology-footnote">
             *<strong>Methodology Standard:</strong> Assumes an industry standard baseline requiring <strong>15 minutes of manual effort per identity event</strong> (5 mins Active Directory OU/Group provisioning + 5 mins Authentik SSO user/group mapping + 5 mins PostgreSQL HR database record update).
         </p>
-    </div>
-
-    <div class="card">
-        <h2>Downstream System Status</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Target System</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% set pg_stat = postgres_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
-                <tr>
-                    <td>PostgreSQL Database</td>
-                    <td>
-                        <span class="status-badge {% if pg_stat == 'FAILED' %}failed{% endif %}">
-                            {{ pg_stat }}
-                        </span>
-                    </td>
-                </tr>
-                {% set auth_stat = authentik_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
-                <tr>
-                    <td>Authentik SSO</td>
-                    <td>
-                        <span class="status-badge {% if auth_stat == 'FAILED' %}failed{% endif %}">
-                            {{ auth_stat }}
-                        </span>
-                    </td>
-                </tr>
-                {% set ad_stat = ad_status | default('SYNCHRONIZED' if sync_result.rc | default(0) == 0 else 'FAILED') %}
-                <tr>
-                    <td>Active Directory</td>
-                    <td>
-                        <span class="status-badge {% if ad_stat == 'FAILED' %}failed{% endif %}">
-                            {{ ad_stat }}
-                        </span>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 </div>
 
