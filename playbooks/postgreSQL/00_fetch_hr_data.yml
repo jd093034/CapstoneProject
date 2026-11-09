@@ -11,6 +11,9 @@
     db_name: "hr_db"
 
   tasks:
+    # -------------------------------------------------------------------------
+    # 1. Query Active Employees with K-12 Attributes
+    # -------------------------------------------------------------------------
     - name: Query Active Employees from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -18,9 +21,24 @@
         login_port: "{{ db_port }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
-        query: "SELECT username, email, first_name, last_name, department FROM employees WHERE status = 'ACTIVE';"
+        query: |
+          SELECT 
+            username, 
+            first_name, 
+            last_name, 
+            user_type, 
+            school, 
+            grade_level, 
+            department, 
+            email, 
+            status 
+          FROM employees 
+          WHERE status = 'ACTIVE';
       register: active_hr_users
 
+    # -------------------------------------------------------------------------
+    # 2. Query Inactive Employees with Offboarding Metadata & K-12 Attributes
+    # -------------------------------------------------------------------------
     - name: Query Inactive Employees from PostgreSQL with Offboarding Metadata
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -31,16 +49,23 @@
         query: |
           SELECT 
             username, 
-            email, 
             first_name, 
             last_name, 
-            department,
+            user_type, 
+            school, 
+            grade_level, 
+            department, 
+            email, 
+            status,
             COALESCE(terminated_at, NOW())::text AS terminated_at,
             COALESCE(legal_hold, FALSE) AS legal_hold
           FROM employees 
           WHERE status IN ('INACTIVE', 'TERMINATED');
       register: inactive_hr_users
 
+    # -------------------------------------------------------------------------
+    # 3. Query User-to-Group Mappings from PostgreSQL
+    # -------------------------------------------------------------------------
     - name: Query User-to-Group Mappings from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -51,6 +76,9 @@
         query: "SELECT department AS group, array_agg(username) AS members FROM employees WHERE status = 'ACTIVE' GROUP BY department;"
       register: hr_group_mappings
 
+    # -------------------------------------------------------------------------
+    # 4. Map PostgreSQL rows into dynamic pipeline facts
+    # -------------------------------------------------------------------------
     - name: Map PostgreSQL rows into dynamic pipeline facts
       ansible.builtin.set_fact:
         dynamic_ad_users: "{{ active_hr_users.query_result | flatten }}"
@@ -65,6 +93,9 @@
           {% endfor %}
           ]
 
+    # -------------------------------------------------------------------------
+    # 5. Stage Dynamic JSON Files
+    # -------------------------------------------------------------------------
     - name: Save active users to temp JSON file
       ansible.builtin.copy:
         content: "{{ {'dynamic_ad_users': dynamic_ad_users} | to_nice_json }}"

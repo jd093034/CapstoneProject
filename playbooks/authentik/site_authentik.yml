@@ -1,6 +1,5 @@
 # ==============================================================================
 # Domain Master: Authentik Identity Provisioning
 # ==============================================================================
-- import_playbook: 01_groups_to_authentik.yml
 - import_playbook: 02_users_to_authentik.yml
 - import_playbook: 03_deprovision_authentik.yml

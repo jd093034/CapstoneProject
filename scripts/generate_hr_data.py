@@ -14,26 +14,22 @@ fake = Faker()
 
 # Absolute path resolution relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEPARTMENTS_FILE = os.path.join(SCRIPT_DIR, "departments.json")
 
-def load_departments(filepath):
-    """Loads department names from an external JSON file."""
-    if not os.path.exists(filepath):
-        print(f"[!] Error: Department configuration file not found at {filepath}")
-        sys.exit(1)
-        
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            departments = json.load(f)
-            if not isinstance(departments, list) or not departments:
-                raise ValueError("JSON content must be a non-empty list of strings.")
-            return departments
-    except Exception as e:
-        print(f"[!] Error reading {filepath}: {e}")
-        sys.exit(1)
+# K-12 Campus & Identity Configurations
+SCHOOL_CONFIG = [
+    {"name": "Oakridge Elementary", "type": "STUDENT", "grades": ["00", "01", "02", "03", "04", "05"]},
+    {"name": "Pinecrest Elementary", "type": "STUDENT", "grades": ["00", "01", "02", "03", "04", "05"]},
+    {"name": "Lakeside Middle School", "type": "STUDENT", "grades": ["06", "07", "08"]},
+    {"name": "Apex High School", "type": "STUDENT", "grades": ["09", "10", "11", "12"]},
+]
 
-# Dynamically load departments list
-REAL_DEPARTMENTS = load_departments(DEPARTMENTS_FILE)
+STAFF_CONFIG = [
+    {"user_type": "FACULTY", "dept": "Instructional Staff"},
+    {"user_type": "ADMIN", "dept": "Administration"},
+    {"user_type": "SUPPORT", "dept": "IT & Operational Support"},
+]
+
+SCHOOL_NAMES = [s["name"] for s in SCHOOL_CONFIG]
 
 # Resolve Vault paths
 vault_path = "vars/vault.yml"
@@ -79,8 +75,8 @@ vault = load_vault_config(vault_path, vault_pass_path)
 
 DB_HOST = vault.get("db_host", "10.2.8.106")
 DB_NAME = vault.get("db_name", "hr_db")
-DB_USER = vault.get("vault_db_user") or vault.get("db_user", "hr_admin")
-DB_PASS = vault.get("vault_db_password") or vault.get("db_password", "ApexPassword123!")
+DB_USER = vault.get("vault_db_user") or vault.get("db_user", "postgres")
+DB_PASS = vault.get("vault_db_password") or vault.get("db_password", "MySecretAnsibleToken123!")
 DB_PORT = vault.get("db_port", 5432)
 
 def get_db_connection():
@@ -92,36 +88,28 @@ def get_db_connection():
         port=DB_PORT
     )
 
-def get_random_department(current_dept=None):
+def generate_new_hire(cursor, existing_usernames, verbose=True):
     """
-    Selects a department from REAL_DEPARTMENTS.
-    If current_dept is provided, guarantees a different department is chosen for transfers.
-    Enforces 50-character limit to comply with database column constraints.
+    Generates a unique K-12 identity (80% Student, 20% Staff).
+    Ensures unique usernames and valid school/grade mappings.
     """
-    available_depts = [d for d in REAL_DEPARTMENTS if d != current_dept]
-    if not available_depts:
-        available_depts = REAL_DEPARTMENTS
-    chosen_dept = random.choice(available_depts)
-    return chosen_dept[:50]
-
-def generate_new_hire(cursor, existing_usernames):
-    """
-    Generates a unique new hire.
-    Appends numeric suffixes if username collisions occur to guarantee successful DB insertion.
-    """
+    is_student = random.random() < 0.8
+    
     while True:
         first_name = fake.first_name()[:50]
         last_name = fake.last_name()[:50]
         
-        # Base username construction
         clean_first = first_name[0].lower().replace(" ", "").replace("'", "")
         clean_last = last_name.lower().replace(" ", "").replace("'", "")
-        base_username = f"{clean_first}{clean_last}"[:45]
         
+        if is_student:
+            base_username = f"{clean_first}{clean_last}{random.randint(100, 999)}"[:45]
+        else:
+            base_username = f"{clean_first}{clean_last}"[:45]
+            
         username = base_username
         counter = 1
         
-        # Check against database and current run cache for collisions
         while True:
             cursor.execute("SELECT 1 FROM employees WHERE username = %s;", (username,))
             if not cursor.fetchone() and username not in existing_usernames:
@@ -130,26 +118,45 @@ def generate_new_hire(cursor, existing_usernames):
             counter += 1
             
         email = f"{username}@apex.lab"[:50]
-        department = get_random_department()
+        
+        if is_student:
+            user_type = "STUDENT"
+            school_info = random.choice(SCHOOL_CONFIG)
+            school = school_info["name"]
+            grade_level = random.choice(school_info["grades"])
+            department = f"Grade {grade_level}"
+        else:
+            staff_info = random.choice(STAFF_CONFIG)
+            user_type = staff_info["user_type"]
+            school = random.choice(SCHOOL_NAMES)
+            grade_level = "N/A"
+            department = staff_info["dept"]
         
         query = """
-        INSERT INTO employees (first_name, last_name, username, department, email, status)
-        VALUES (%s, %s, %s, %s, %s, 'ACTIVE')
+        INSERT INTO employees (first_name, last_name, username, user_type, school, grade_level, department, email, status, legal_hold)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', False)
         ON CONFLICT (username) DO NOTHING;
         """
-        cursor.execute(query, (first_name, last_name, username, department, email))
+        cursor.execute(query, (first_name, last_name, username, user_type, school, grade_level, department, email))
         
         if cursor.rowcount > 0:
-            print(f"[+] HIRED: {first_name} {last_name} ({username}) | Dept: '{department}'")
+            if verbose:
+                if is_student:
+                    print(f"[+] ENROLLED: {first_name} {last_name} ({username}) | Type: STUDENT | Campus: '{school}' | Cohort: '{department}'")
+                else:
+                    print(f"[+] HIRED: {first_name} {last_name} ({username}) | Type: {user_type} | Campus: '{school}' | Dept: '{department}'")
             existing_usernames.add(username)
             return username
 
 def simulate_department_transfer(cursor, exclude_usernames=None):
+    """
+    Simulates grade promotion/graduation for students or school reassignment for staff.
+    """
     exclude_usernames = exclude_usernames or set()
     
     if exclude_usernames:
         query = """
-            SELECT username, department 
+            SELECT username, user_type, school, grade_level, department 
             FROM employees 
             WHERE status = 'ACTIVE' AND username NOT IN %s
             ORDER BY RANDOM() LIMIT 1;
@@ -157,7 +164,7 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
         cursor.execute(query, (tuple(exclude_usernames),))
     else:
         query = """
-            SELECT username, department 
+            SELECT username, user_type, school, grade_level, department 
             FROM employees 
             WHERE status = 'ACTIVE'
             ORDER BY RANDOM() LIMIT 1;
@@ -166,24 +173,72 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
 
     user = cursor.fetchone()
     if user:
-        username, current_dept = user
-        new_dept = get_random_department(current_dept=current_dept)
+        username, user_type, current_school, current_grade, current_dept = user
+        
+        if user_type == "STUDENT":
+            if current_grade == "12" or current_grade == "GRAD":
+                # Senior Graduation Event -> Shift to Graduates OU & GRP_Graduates
+                new_grade = "GRAD"
+                new_school = "Graduates"
+                new_dept = "Alumni"
+                
+                cursor.execute("""
+                    UPDATE employees 
+                    SET school = %s, grade_level = %s, department = %s 
+                    WHERE username = %s;
+                """, (new_school, new_grade, new_dept, username))
+                print(f"[*] GRADUATED: {username} | Apex High School (Grade 12) -> Graduates OU")
+            else:
+                # Standard Grade promotion logic
+                grade_int = int(current_grade) if current_grade.isdigit() else 0
+                new_grade_int = grade_int + 1
+                
+                if new_grade_int > 12:
+                    new_grade = "GRAD"
+                    new_school = "Graduates"
+                    new_dept = "Alumni"
+                    print(f"[*] GRADUATED: {username} | {current_school} (Grade {current_grade}) -> Graduates OU")
+                else:
+                    new_grade = f"{new_grade_int:02d}"
+                    if new_grade_int <= 5:
+                        new_school = current_school if "Elementary" in current_school else random.choice(["Oakridge Elementary", "Pinecrest Elementary"])
+                    elif new_grade_int <= 8:
+                        new_school = "Lakeside Middle School"
+                    else:
+                        new_school = "Apex High School"
+                    new_dept = f"Grade {new_grade}"
+                    
+                    print(f"[*] PROMOTED: {username} | Cohort: '{current_school} ({current_dept})' -> '{new_school} ({new_dept})'")
+
+                cursor.execute("""
+                    UPDATE employees 
+                    SET school = %s, grade_level = %s, department = %s 
+                    WHERE username = %s;
+                """, (new_school, new_grade, new_dept, username))
+        else:
+            # Staff school transfer logic
+            available_schools = [s for s in SCHOOL_NAMES if s != current_school]
+            new_school = random.choice(available_schools)
             
-        cursor.execute("""
-            UPDATE employees 
-            SET department = %s 
-            WHERE username = %s;
-        """, (new_dept, username))
-        print(f"[*] TRANSFERRED: {username} | From: '{current_dept}' -> To: '{new_dept}'")
+            cursor.execute("""
+                UPDATE employees 
+                SET school = %s 
+                WHERE username = %s;
+            """, (new_school, username))
+            print(f"[*] TRANSFERRED: {username} | Campus: '{current_school}' -> '{new_school}' (Staff Reassignment)")
+            
         return username
     return None
 
 def simulate_termination(cursor, exclude_usernames=None):
+    """
+    Simulates student withdrawal or staff termination.
+    """
     exclude_usernames = exclude_usernames or set()
     
     if exclude_usernames:
         query = """
-            SELECT username 
+            SELECT username, user_type, school 
             FROM employees 
             WHERE status = 'ACTIVE' AND username NOT IN %s
             ORDER BY RANDOM() LIMIT 1;
@@ -191,7 +246,7 @@ def simulate_termination(cursor, exclude_usernames=None):
         cursor.execute(query, (tuple(exclude_usernames),))
     else:
         query = """
-            SELECT username 
+            SELECT username, user_type, school 
             FROM employees 
             WHERE status = 'ACTIVE'
             ORDER BY RANDOM() LIMIT 1;
@@ -200,48 +255,60 @@ def simulate_termination(cursor, exclude_usernames=None):
 
     user = cursor.fetchone()
     if user:
-        username = user[0]
+        username, user_type, school = user
         cursor.execute("""
             UPDATE employees 
             SET status = 'TERMINATED',
                 terminated_at = NOW() 
             WHERE username = %s;
         """, (username,))
-        print(f"[-] TERMINATED: {username}")
+        if user_type == "STUDENT":
+            print(f"[-] WITHDRAWN: {username} | Type: STUDENT | Campus: '{school}' | 30-Day Retention Grace Period Initiated")
+        else:
+            print(f"[-] SEPARATED: {username} | Type: {user_type} | Campus: '{school}' | Account Disabled")
         return username
     return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="HR Synthetic Data Generator")
-    parser.add_argument("--hires", type=int, default=3, help="Number of new hires to generate")
-    parser.add_argument("--transfers", type=int, default=1, help="Number of department transfers to generate")
-    parser.add_argument("--terms", type=int, default=1, help="Number of terminations to generate")
+    parser = argparse.ArgumentParser(description="K-12 SIS Identity Event Generator")
+    parser.add_argument("--count", type=int, default=None, help="Bulk initial seeding count (overrides hires/transfers/terms)")
+    parser.add_argument("--hires", type=int, default=3, help="Number of new enrollments/staff hires to generate")
+    parser.add_argument("--transfers", type=int, default=1, help="Number of grade/school transitions to generate")
+    parser.add_argument("--terms", type=int, default=1, help="Number of withdrawals/terminations to generate")
     args = parser.parse_args()
 
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    print("--- Simulating HR Lifecycle Events ---")
+    print("--- Simulating SIS (Student Information System) Real-Time Data Stream ---")
     
     processed_this_run = set()
     
-    # 1. Generate Hires
-    for _ in range(args.hires):
-        new_user = generate_new_hire(cursor, processed_this_run)
-        if new_user:
-            processed_this_run.add(new_user)
+    if args.count:
+        print(f"[*] Bulk seeding SIS database with {args.count} synthetic K-12 student and staff identities...")
+        for i in range(args.count):
+            verbose_log = (args.count <= 20) or ((i + 1) % 100 == 0)
+            new_user = generate_new_hire(cursor, processed_this_run, verbose=verbose_log)
+            if verbose_log and args.count > 20:
+                print(f"    [+] Seeded {i + 1}/{args.count} identities...")
+    else:
+        # 1. Generate Enrollments / Hires
+        for _ in range(args.hires):
+            new_user = generate_new_hire(cursor, processed_this_run, verbose=True)
+            if new_user:
+                processed_this_run.add(new_user)
+            
+        # 2. Simulate Transitions / Graduations
+        for _ in range(args.transfers):
+            transferred_user = simulate_department_transfer(cursor, exclude_usernames=processed_this_run)
+            if transferred_user:
+                processed_this_run.add(transferred_user)
         
-    # 2. Simulate Transfers
-    for _ in range(args.transfers):
-        transferred_user = simulate_department_transfer(cursor, exclude_usernames=processed_this_run)
-        if transferred_user:
-            processed_this_run.add(transferred_user)
-    
-    # 3. Simulate Terminations
-    for _ in range(args.terms):
-        terminated_user = simulate_termination(cursor, exclude_usernames=processed_this_run)
-        if terminated_user:
-            processed_this_run.add(terminated_user)
+        # 3. Simulate Terminations / Withdrawals
+        for _ in range(args.terms):
+            terminated_user = simulate_termination(cursor, exclude_usernames=processed_this_run)
+            if terminated_user:
+                processed_this_run.add(terminated_user)
     
     conn.commit()
     cursor.close()

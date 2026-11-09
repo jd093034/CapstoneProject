@@ -1,8 +1,8 @@
 ---
 # ==============================================================================
-# Master Pipeline: HR Identity Lifecycle Automation & Live Reconciliation
+# Master Pipeline: K-12 District Identity Lifecycle Automation & Reconciliation
 # ==============================================================================
-- name: End-to-End HR Lifecycle Automation & Synchronization Pipeline
+- name: End-to-End K-12 District Identity Lifecycle Automation Pipeline
   hosts: localhost
   gather_facts: true
 
@@ -17,17 +17,17 @@
 
   vars_prompt:
     - name: req_hires
-      prompt: "How many NEW HIRES do you want to generate?"
+      prompt: "How many NEW ENROLLMENTS / HIRES do you want to generate?"
       default: "3"
       private: false
 
     - name: req_transfers
-      prompt: "How many DEPARTMENT TRANSFERS do you want to generate?"
+      prompt: "How many PROMOTIONS / CAMPUS TRANSFERS do you want to generate?"
       default: "1"
       private: false
 
     - name: req_terms
-      prompt: "How many TERMINATIONS do you want to generate?"
+      prompt: "How many WITHDRAWALS / SEPARATIONS do you want to generate?"
       default: "1"
       private: false
 
@@ -48,9 +48,9 @@
         mode: '0755'
 
     # =========================================================================
-    # Phase 1: Synthetic HR Event Generation
+    # Phase 1: K-12 SIS Data Stream Event Generation
     # =========================================================================
-    - name: "Phase 1 | Execute Synthetic HR Data Generator"
+    - name: "Phase 1 | Execute K-12 SIS Identity Event Generator"
       ansible.builtin.command:
         cmd: >
           python3 scripts/generate_hr_data.py
@@ -66,18 +66,18 @@
         dest: "/tmp/hr_gen_output.log"
         mode: '0644'
 
-    - name: "Phase 1 | Archive Timestamped Generator Execution Log"
+    - name: "Phase 1 | Archive Timestamped SIS Event Execution Log"
       ansible.builtin.copy:
         content: "{{ hr_script_output.stdout | default('') }}"
-        dest: "{{ log_archive_dir }}/hr_gen_{{ ansible_date_time.date }}_{{ ansible_date_time.time | replace(':', '-') }}.log"
+        dest: "{{ log_archive_dir }}/sis_gen_{{ ansible_date_time.date }}_{{ ansible_date_time.time | replace(':', '-') }}.log"
         mode: '0644'
 
-    - name: "Phase 1 | Extract Generated Log Lines"
+    - name: "Phase 1 | Display Processed SIS Lifecycle Events"
       ansible.builtin.debug:
         msg: "{{ hr_script_output.stdout_lines }}"
 
     # =========================================================================
-    # Phase 2: Multi-System Execution (site.yml)
+    # Phase 2: Multi-System Sync Execution (site.yml)
     # =========================================================================
     - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
       ansible.builtin.command:
@@ -85,7 +85,7 @@
           ansible-playbook -i /root/ansible/inventory/hosts.ini
           /root/ansible/playbooks/site.yml
           --vault-password-file /root/ansible/vars/.vault_pass
-          -f 10
+          -f 20
       environment:
         ANSIBLE_HOST_KEY_CHECKING: "False"
       register: sync_result
@@ -110,7 +110,7 @@
       ansible.builtin.debug:
         msg: |
           =====================================================
-                    HR LIFECYCLE SYNC EXECUTION RESULTS         
+               K-12 DISTRICT IDENTITY SYNC EXECUTION RESULTS   
           =====================================================
           {{ sync_result.stdout }}
 
@@ -123,7 +123,7 @@
         state: directory
         mode: '0755'
 
-    - name: "Phase 4 | Execute Live System Audit & Reconciliation Engine"
+    - name: "Phase 4 | Execute K-12 Reconciliation Audit Engine"
       ansible.builtin.command:
         cmd: "python3 scripts/audit_reconciliation.py"
       environment:
@@ -135,16 +135,16 @@
         DB_USER: "{{ vault_db_user }}"
         DB_PASSWORD: "{{ vault_db_password }}"
         AD_HOST: "10.2.8.67"
-        AD_USER: "{{ vault_ad_admin_user }}"
-        AD_PASSWORD: "{{ vault_ad_admin_password }}"
+        AD_USER: "{{ vault_ad_user | default(vault_ad_username | default(vault_winrm_user | default(vault_ad_admin_user | default('Administrator')))) }}"
+        AD_PASSWORD: "{{ vault_ad_password | default(vault_ad_pass | default(vault_winrm_password | default(vault_ad_admin_password | default(vault_ssh_password | default(''))))) }}"
         AD_DOMAIN: "{{ ad_domain | default('apex.lab') }}"
       register: audit_exec_output
 
-    - name: "Phase 4 | Display Audit Reconciliation Output"
+    - name: "Phase 4 | Display Reconciliation Engine Audit Summary"
       ansible.builtin.debug:
         msg: "{{ audit_exec_output.stdout_lines }}"
 
-    - name: "Phase 4 | Publish HTML Reports to Nginx web root on 10.2.8.68"
+    - name: "Phase 4 | Publish HTML Reports to Nginx Web Root on 10.2.8.68"
       ansible.builtin.copy:
         src: "/root/ansible/reports/"
         dest: "/var/www/html/"

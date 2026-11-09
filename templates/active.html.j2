@@ -357,10 +357,10 @@
         <div class="warning-banner">
             <strong>Sync Verification Warning:</strong> Detected {{ mismatches_cnt }} desynchronized active identity endpoint state(s).
             {% if active_authentik_mismatch_list is defined and active_authentik_mismatch_list | length > 0 %}
-                <br/>• <strong>Authentik SSO Missing / Inactive:</strong> {{ active_authentik_mismatch_list | join(', ') }}
+                <br/><strong>Authentik SSO Missing / Inactive:</strong> {{ active_authentik_mismatch_list | join(', ') }}
             {% endif %}
             {% if active_ad_mismatch_list is defined and active_ad_mismatch_list | length > 0 %}
-                <br/>• <strong>Active Directory Missing / Disabled:</strong> {{ active_ad_mismatch_list | join(', ') }}
+                <br/><strong>Active Directory Missing / Disabled:</strong> {{ active_ad_mismatch_list | join(', ') }}
             {% endif %}
         </div>
         {% endif %}
@@ -384,7 +384,9 @@
                     <tr class="table-row">
                         <td class="td-nowrap"><code>{{ u.username | default('N/A') }}</code></td>
                         <td class="td-nowrap">
-                            {% if u.first_name is defined and u.last_name is defined and u.first_name and u.last_name and u.first_name != 'None' and u.last_name != 'None' %}
+                            {% if u.full_name is defined and u.full_name %}
+                                {{ u.full_name }}
+                            {% elif u.first_name is defined and u.last_name is defined and u.first_name and u.last_name and u.first_name != 'None' and u.last_name != 'None' %}
                                 {{ u.first_name }} {{ u.last_name }}
                             {% elif u.name is defined and u.name and u.name != 'None' %}
                                 {{ u.name }}
@@ -394,7 +396,7 @@
                         </td>
                         <td>{{ u.email | default('N/A') }}</td>
                         <td>{{ u.department | default('N/A') }}</td>
-                        <td><span class="badge-ou">OU={{ u.department | default('Users') }},OU=Departments</span></td>
+                        <td><span class="badge-ou">{{ u.ad_location | default(u.ou | default('OU=APEX K12')) }}</span></td>
                     </tr>
                     {% endfor %}
                 {% else %}

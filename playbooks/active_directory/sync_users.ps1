@@ -1,5 +1,8 @@
 Import-Module ActiveDirectory -ErrorAction Stop
 
+# ==============================================================================
+# Configuration & Payload Staging
+# ==============================================================================
 $jsonPath         = "C:\Windows\Temp\dynamic_ad_users.json"
 $inactiveJsonPath = "C:\Windows\Temp\dynamic_inactive_users.json"
 
@@ -29,96 +32,128 @@ if (Test-Path $inactiveJsonPath) {
     }
 }
 
-Write-Host "Loaded $($users.Count) active user(s) and $($inactiveUsers.Count) inactive user(s) for AD sync."
+Write-Host "Loaded $($users.Count) active user(s) and $($inactiveUsers.Count) inactive user(s) for K-12 AD sync."
 
-$domain            = "apex.lab"
-$parentOU          = "OU=APEX Lab,DC=apex,DC=lab"
-$targetOU          = "OU=Departments,OU=APEX Lab,DC=apex,DC=lab"
-$disabledOU        = "OU=Users - Disabled,DC=apex,DC=lab"
-$legacyDisabledOUs = @("OU=Disabled Users,DC=apex,DC=lab", "OU=Disabled Users,OU=APEX Lab,DC=apex,DC=lab")
-$userOU            = "CN=Users,DC=apex,DC=lab"
+$domain     = "apex.lab"
+$domainDN   = (Get-ADDomain).DistinguishedName
+$rootOU     = "OU=APEX K12,$domainDN"
+$disabledOU = "OU=Users - Disabled,OU=APEX K12,$domainDN"
+$groupOU    = "OU=Groups,OU=APEX K12,$domainDN"
 
-# ==============================================================================
-# 1. Structure & Organizational Unit (OU) Management (No Sub-OUs)
-# ==============================================================================
-
-# Ensure Disabled Accounts OU exists
-try {
-    $null = Get-ADOrganizationalUnit -Identity $disabledOU -ErrorAction Stop
-} catch {
-    $ouName = ($disabledOU -split ',')[0] -replace 'OU=', ''
-    $ouPath = ($disabledOU -split ',', 2)[1]
-    New-ADOrganizationalUnit -Name $ouName -Path $ouPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
-    Write-Host "[+] CREATED OU: $ouName at $ouPath"
-}
-
-# Migrate legacy disabled accounts if present
-foreach ($oldOU in $legacyDisabledOUs) {
-    if (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$oldOU'" -ErrorAction SilentlyContinue) {
-        $legacyUsers = Get-ADUser -Filter * -SearchBase $oldOU -ErrorAction SilentlyContinue
-        foreach ($lu in $legacyUsers) {
-            Move-ADObject -Identity $lu.DistinguishedName -TargetPath $disabledOU -ErrorAction SilentlyContinue
-            Write-Host "[*] MIGRATED LEGACY DISABLED USER: $($lu.SamAccountName) -> $disabledOU"
-        }
-        Set-ADOrganizationalUnit -Identity $oldOU -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
-        Remove-ADOrganizationalUnit -Identity $oldOU -Confirm:$false -ErrorAction SilentlyContinue
-        Write-Host "[-] REMOVED LEGACY OU: $oldOU"
-    }
-}
-
-# Ensure parent & target department container OUs exist
-foreach ($ou in @($parentOU, $targetOU)) {
-    try {
-        $null = Get-ADOrganizationalUnit -Identity $ou -ErrorAction Stop
-    } catch {
-        $pName = ($ou -split ',')[0] -replace 'OU=', ''
-        $pPath = ($ou -split ',', 2)[1]
-        New-ADOrganizationalUnit -Name $pName -Path $pPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
-        Write-Host "[+] CREATED OU: $pName at $pPath"
-    }
-}
+# Legacy OUs for automated migration/cleanup
+$legacyOUs = @(
+    "OU=Departments,OU=APEX Lab,$domainDN",
+    "OU=APEX Lab,$domainDN",
+    "OU=Users - Disabled,$domainDN",
+    "OU=Disabled Users,$domainDN"
+)
 
 $secPassword = ConvertTo-SecureString $env:DEFAULT_PASSWORD -AsPlainText -Force
 
 # ==============================================================================
-# 2. In-Memory Directory Store & Department Group Pre-Caching
+# 1. K-12 Directory Taxonomy Construction & OU Pre-Caching
 # ==============================================================================
-Write-Host "[*] Pre-caching Active Directory user store and department groups..."
+$K12_OUs = @(
+    "OU=APEX K12,$domainDN",
+    "OU=Students,OU=APEX K12,$domainDN",
+    "OU=Oakridge Elementary,OU=Students,OU=APEX K12,$domainDN",
+    "OU=Pinecrest Elementary,OU=Students,OU=APEX K12,$domainDN",
+    "OU=Lakeside Middle School,OU=Students,OU=APEX K12,$domainDN",
+    "OU=Apex High School,OU=Students,OU=APEX K12,$domainDN",
+    "OU=Graduates,OU=Students,OU=APEX K12,$domainDN",
+    "OU=Staff,OU=APEX K12,$domainDN",
+    "OU=Faculty,OU=Staff,OU=APEX K12,$domainDN",
+    "OU=Administration,OU=Staff,OU=APEX K12,$domainDN",
+    "OU=Support Staff,OU=Staff,OU=APEX K12,$domainDN",
+    "OU=Groups,OU=APEX K12,$domainDN",
+    "OU=Users - Disabled,OU=APEX K12,$domainDN"
+)
 
-# Cache ALL AD user accounts in 1 single LDAP query (Keyed by lowercase sAMAccountName)
+$OUCache = @{}
+foreach ($ouPath in $K12_OUs) {
+    $OUCache[$ouPath.ToLower()] = $true
+    try {
+        $null = Get-ADOrganizationalUnit -Identity $ouPath -ErrorAction Stop
+    } catch {
+        $ouName = ($ouPath -split ',')[0] -replace 'OU=', ''
+        $parentPath = ($ouPath -split ',', 2)[1]
+        New-ADOrganizationalUnit -Name $ouName -Path $parentPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
+        Write-Host "[+] CREATED K-12 OU: $ouName at $parentPath"
+    }
+}
+
+# Migrate legacy corporate accounts if present
+foreach ($oldOU in $legacyOUs) {
+    if (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$oldOU'" -ErrorAction SilentlyContinue) {
+        $legacyUsers = Get-ADUser -Filter * -SearchBase $oldOU -ErrorAction SilentlyContinue
+        foreach ($lu in $legacyUsers) {
+            Move-ADObject -Identity $lu.DistinguishedName -TargetPath $disabledOU -ErrorAction SilentlyContinue
+            Write-Host "[*] MIGRATED LEGACY USER: $($lu.SamAccountName) -> $disabledOU"
+        }
+    }
+}
+
+# Ensure standard GRP_ Security Groups exist (Including GRP_Graduates)
+$BaseGroups = @(
+    "GRP_District_Students", "GRP_District_Faculty", "GRP_District_Staff", "GRP_Graduates",
+    "GRP_Oakridge_ES", "GRP_Pinecrest_ES", "GRP_Lakeside_MS", "GRP_Apex_HS"
+)
+0..12 | ForEach-Object { $BaseGroups += ("GRP_Grade_{0:D2}" -f $_) }
+
+foreach ($grpName in $BaseGroups) {
+    if (-not (Get-ADGroup -Filter "SamAccountName -eq '$grpName'" -ErrorAction SilentlyContinue)) {
+        New-ADGroup -Name $grpName -SamAccountName $grpName -GroupCategory Security -GroupScope Global -Path $groupOU -ErrorAction SilentlyContinue
+        Write-Host "[+] CREATED K-12 SECURITY GROUP: '$grpName' in $groupOU"
+    }
+}
+
+# ==============================================================================
+# 2. Fast In-Memory Directory Store & Group Pre-Caching
+# ==============================================================================
+Write-Host "[*] Pre-caching Active Directory user store and security groups..."
+
 $ADUserCache = @{}
-Get-ADUser -Filter * -Properties Enabled, DistinguishedName | ForEach-Object {
+Get-ADUser -Filter * -SearchBase "OU=APEX K12,$domainDN" -Properties Enabled, DistinguishedName -ErrorAction SilentlyContinue | ForEach-Object {
     $ADUserCache[$_.SamAccountName.ToLower()] = $_
 }
 
-# Extract unique departments and pre-cache department Security Groups in $targetOU
-$depts        = @($users | Select-Object -ExpandProperty department -Unique | Where-Object { $_ })
 $GroupCache   = @{}
 $GroupMembers = @{}
 
-foreach ($d in $depts) {
-    $groupSam = $d -replace '[\/:*?"<>|]', ''
-    $grp = Get-ADGroup -Filter "SamAccountName -eq '$groupSam'" -ErrorAction SilentlyContinue
-    if (-not $grp) {
-        $grp = New-ADGroup -Name $d -SamAccountName $groupSam -GroupScope Global -GroupCategory Security -Path $targetOU -PassThru -ErrorAction SilentlyContinue
-        Write-Host "[+] CREATED AD SECURITY GROUP: '$d' in $targetOU"
-    }
+# Fast group member caching via direct 'member' attribute read (avoids LDAP object resolution)
+Get-ADGroup -Filter "SamAccountName -like 'GRP_*'" -SearchBase $groupOU -Properties member -ErrorAction SilentlyContinue | ForEach-Object {
+    $grpSam = $_.SamAccountName
+    $GroupCache[$grpSam] = $_
     
-    if ($grp) {
-        $GroupCache[$groupSam] = $grp
-        $members = Get-ADGroupMember -Identity $grp.DistinguishedName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SamAccountName
-        $memberHash = @{}
-        foreach ($m in $members) { $memberHash[$m.ToLower()] = $true }
-        $GroupMembers[$groupSam] = $memberHash
+    $memberHash = @{}
+    if ($_.member) {
+        foreach ($mDN in $_.member) {
+            if ($mDN -match "CN=.*?\((.*?)\),") {
+                $memberHash[$Matches[1].ToLower()] = $true
+            } else {
+                $cnVal = ($mDN -split ',')[0] -replace 'CN=', ''
+                $memberHash[$cnVal.ToLower()] = $true
+            }
+        }
     }
+    $GroupMembers[$grpSam] = $memberHash
 }
 
-# Queues for bulk RPC group operations
 $PendingGroupAdds    = @{}
 $PendingGroupRemoves = @{}
 
+# Helper function to convert numeric grade to GRP_Grade_XX
+function Format-GradeGroup ($gradeStr) {
+    if ([string]::IsNullOrWhiteSpace($gradeStr) -or $gradeStr -eq "N/A" -or $gradeStr -eq "GRAD") { return $null }
+    $gInt = 0
+    if ([int]::TryParse($gradeStr, [ref]$gInt)) {
+        return ("GRP_Grade_{0:D2}" -f $gInt)
+    }
+    return $null
+}
+
 # ==============================================================================
-# 3. Process Terminated Users (Offboarding & Legal Hold Protocol)
+# 3. Process Terminated Users (Offboarding & FERPA Retention Protocol)
 # ==============================================================================
 foreach ($u in $inactiveUsers) {
     $username = $u.username
@@ -157,16 +192,18 @@ foreach ($u in $inactiveUsers) {
                 Write-Host "[-] DISABLED AD USER: $username"
             }
 
-            if ($adUser.DistinguishedName -notlike "*$disabledOU*") {
+            if ($adUser.DistinguishedName.ToLower() -notlike "*$($disabledOU.ToLower())*") {
                 Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $disabledOU -ErrorAction SilentlyContinue
                 Write-Host "[*] MOVED TO DISABLED OU: $username -> $disabledOU"
             }
 
-            # Queue group removal in memory
+            # Queue removal from all GRP_ security groups
             foreach ($gSam in $GroupMembers.Keys) {
                 if ($GroupMembers[$gSam].ContainsKey($uLower)) {
-                    if (-not $PendingGroupRemoves.ContainsKey($gSam)) { $PendingGroupRemoves[$gSam] = @() }
-                    $PendingGroupRemoves[$gSam] += $username
+                    if (-not $PendingGroupRemoves.ContainsKey($gSam)) { 
+                        $PendingGroupRemoves[$gSam] = [System.Collections.Generic.List[string]]::new()
+                    }
+                    $PendingGroupRemoves[$gSam].Add($username)
                 }
             }
         }
@@ -174,7 +211,7 @@ foreach ($u in $inactiveUsers) {
 }
 
 # ==============================================================================
-# 4. Provision & Synchronize Active Users (Container: CN=Users,DC=apex,DC=lab)
+# 4. Provision & Synchronize Active K-12 Identities
 # ==============================================================================
 foreach ($u in $users) {
     $username = $u.username
@@ -185,64 +222,113 @@ foreach ($u in $users) {
     $lastName  = $u.last_name
     $fullName  = "$firstName $lastName"
     $email     = $u.email
-    $dept      = $u.department
+    $uType     = $u.user_type
+    $school    = $u.school
+    $grade     = [string]$u.grade_level
 
-    # Create missing account directly in $userOU (CN=Users,DC=apex,DC=lab)
+    # Determine Target Campus/Division OU (Including Graduates OU Routing)
+    if ($uType -eq "STUDENT") {
+        if ($grade -eq "GRAD" -or $school -like "*Graduates*") {
+            $targetOU = "OU=Graduates,OU=Students,OU=APEX K12,$domainDN"
+        } else {
+            $targetOU = "OU=$school,OU=Students,OU=APEX K12,$domainDN"
+        }
+    } elseif ($uType -eq "FACULTY") {
+        $targetOU = "OU=Faculty,OU=Staff,OU=APEX K12,$domainDN"
+    } elseif ($uType -eq "ADMIN") {
+        $targetOU = "OU=Administration,OU=Staff,OU=APEX K12,$domainDN"
+    } else {
+        $targetOU = "OU=Support Staff,OU=Staff,OU=APEX K12,$domainDN"
+    }
+
+    # Fast in-memory check to ensure target OU exists (eliminates 1,000 LDAP ADSI calls)
+    $targetOULower = $targetOU.ToLower()
+    if (-not $OUCache.ContainsKey($targetOULower)) {
+        if (-not ([adsi]::Exists("LDAP://$targetOU"))) {
+            $ouName = ($targetOU -split ',')[0] -replace 'OU=', ''
+            $parentPath = ($targetOU -split ',', 2)[1]
+            New-ADOrganizationalUnit -Name $ouName -Path $parentPath -ProtectedFromAccidentalDeletion $false -ErrorAction SilentlyContinue
+        }
+        $OUCache[$targetOULower] = $true
+    }
+
+    # Create missing account directly in assigned K-12 OU
     if (-not $ADUserCache.ContainsKey($uLower)) {
         $cnName = "$fullName ($username)"
         try {
             New-ADUser -Name $cnName `
                        -GivenName $firstName `
                        -Surname $lastName `
+                       -DisplayName $fullName `
                        -UserPrincipalName "$username@$domain" `
                        -SamAccountName $username `
                        -EmailAddress $email `
-                       -Path $userOU `
+                       -Path $targetOU `
                        -AccountPassword $secPassword `
                        -Enabled $true `
                        -PasswordNeverExpires $true `
                        -ErrorAction Stop
-            Write-Host "[+] CREATED AD USER: $username ($cnName) in $userOU"
+            Write-Host "[+] CREATED K-12 AD USER: $username ($cnName) in $targetOU"
         } catch {
-            Write-Error "[!] AD PROVISIONING ERROR for ${username} in ${userOU}: $($_.Exception.Message)"
+            Write-Error "[!] AD PROVISIONING ERROR for ${username} in ${targetOU}: $($_.Exception.Message)"
         }
     } else {
         $adUser = $ADUserCache[$uLower]
         
-        # Re-enable if disabled
+        # Re-enable if currently disabled
         if (-not $adUser.Enabled) {
             Set-ADUser -Identity $username -Enabled $true -ErrorAction SilentlyContinue
             Write-Host "[+] RE-ENABLED AD USER: $username"
         }
 
-        # ONLY execute Move-ADObject if user is coming out of the Disabled OU
-        if ($adUser.DistinguishedName -like "*$disabledOU*") {
+        # Relocate account if Grade Promotion / Graduation / School Transfer moved target OU (case-insensitive)
+        if ($adUser.DistinguishedName.ToLower() -notlike "*$targetOULower*") {
             try {
-                Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $userOU -ErrorAction Stop
-                Write-Host "[*] MOVED AD USER: $username -> $userOU"
+                Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $targetOU -ErrorAction Stop
+                Write-Host "[*] RELOCATED AD USER: $username -> $targetOU"
             } catch {
                 Write-Error "[!] ERROR MOVING AD USER ${username}: $($_.Exception.Message)"
             }
         }
     }
 
-    # Department Group Membership Queuing
-    if (-not [string]::IsNullOrWhiteSpace($dept)) {
-        $targetDeptSam = $dept -replace '[\/:*?"<>|]', ''
+    # Dynamic K-12 RBAC Security Group Membership Reconciliation
+    $TargetGroupsForUser = @{}
+    if ($uType -eq "STUDENT") {
+        if ($grade -eq "GRAD" -or $school -like "*Graduates*") {
+            $TargetGroupsForUser["GRP_Graduates"] = $true
+        } else {
+            $TargetGroupsForUser["GRP_District_Students"] = $true
+            
+            $gradeGrp = Format-GradeGroup $grade
+            if ($gradeGrp) { $TargetGroupsForUser[$gradeGrp] = $true }
 
-        foreach ($gSam in $GroupMembers.Keys) {
-            if ($gSam -eq $targetDeptSam) {
-                # Add to primary department group if missing
-                if (-not $GroupMembers[$gSam].ContainsKey($uLower)) {
-                    if (-not $PendingGroupAdds.ContainsKey($gSam)) { $PendingGroupAdds[$gSam] = @() }
-                    $PendingGroupAdds[$gSam] += $username
+            if ($school -like "*Oakridge*") { $TargetGroupsForUser["GRP_Oakridge_ES"] = $true }
+            elseif ($school -like "*Pinecrest*") { $TargetGroupsForUser["GRP_Pinecrest_ES"] = $true }
+            elseif ($school -like "*Lakeside*") { $TargetGroupsForUser["GRP_Lakeside_MS"] = $true }
+            elseif ($school -like "*Apex High*") { $TargetGroupsForUser["GRP_Apex_HS"] = $true }
+        }
+    } elseif ($uType -eq "FACULTY") {
+        $TargetGroupsForUser["GRP_District_Faculty"] = $true
+    } else {
+        $TargetGroupsForUser["GRP_District_Staff"] = $true
+    }
+
+    # Reconcile membership against all GRP_ groups
+    foreach ($gSam in $GroupMembers.Keys) {
+        if ($TargetGroupsForUser.ContainsKey($gSam)) {
+            if (-not $GroupMembers[$gSam].ContainsKey($uLower)) {
+                if (-not $PendingGroupAdds.ContainsKey($gSam)) { 
+                    $PendingGroupAdds[$gSam] = [System.Collections.Generic.List[string]]::new()
                 }
-            } else {
-                # Strip from stale department groups if present
-                if ($GroupMembers[$gSam].ContainsKey($uLower)) {
-                    if (-not $PendingGroupRemoves.ContainsKey($gSam)) { $PendingGroupRemoves[$gSam] = @() }
-                    $PendingGroupRemoves[$gSam] += $username
+                $PendingGroupAdds[$gSam].Add($username)
+            }
+        } else {
+            if ($GroupMembers[$gSam].ContainsKey($uLower)) {
+                if (-not $PendingGroupRemoves.ContainsKey($gSam)) { 
+                    $PendingGroupRemoves[$gSam] = [System.Collections.Generic.List[string]]::new()
                 }
+                $PendingGroupRemoves[$gSam].Add($username)
             }
         }
     }
@@ -254,7 +340,7 @@ foreach ($u in $users) {
 foreach ($gSam in $PendingGroupRemoves.Keys) {
     $membersToRemove = $PendingGroupRemoves[$gSam]
     if ($membersToRemove.Count -gt 0) {
-        Remove-ADGroupMember -Identity $gSam -Members $membersToRemove -Confirm:$false -ErrorAction SilentlyContinue
+        Remove-ADGroupMember -Identity $gSam -Members $membersToRemove.ToArray() -Confirm:$false -ErrorAction SilentlyContinue
         Write-Host "[-] BULK STRIPPED $($membersToRemove.Count) account(s) from Group '$gSam'"
     }
 }
@@ -262,7 +348,7 @@ foreach ($gSam in $PendingGroupRemoves.Keys) {
 foreach ($gSam in $PendingGroupAdds.Keys) {
     $membersToAdd = $PendingGroupAdds[$gSam]
     if ($membersToAdd.Count -gt 0) {
-        Add-ADGroupMember -Identity $gSam -Members $membersToAdd -ErrorAction SilentlyContinue
+        Add-ADGroupMember -Identity $gSam -Members $membersToAdd.ToArray() -ErrorAction SilentlyContinue
         Write-Host "[+] BULK ADDED $($membersToAdd.Count) account(s) to Group '$gSam'"
     }
 }

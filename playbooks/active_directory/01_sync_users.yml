@@ -16,7 +16,7 @@
     db_name: "hr_db"
 
   tasks:
-    - name: Query Active Employees from PostgreSQL
+    - name: Query Active Employees with K-12 Attributes from PostgreSQL
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
@@ -24,7 +24,16 @@
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
         query: |
-          SELECT username, first_name, last_name, email, department
+          SELECT 
+            username, 
+            first_name, 
+            last_name, 
+            user_type, 
+            school, 
+            grade_level, 
+            department, 
+            email, 
+            status
           FROM employees 
           WHERE status = 'ACTIVE';
       register: active_hr_users
@@ -39,11 +48,18 @@
         query: |
           SELECT 
             username, 
+            first_name, 
+            last_name, 
+            user_type, 
+            school, 
+            grade_level, 
+            department, 
             email, 
+            status,
             COALESCE(terminated_at, NOW())::text AS terminated_at,
             COALESCE(legal_hold, FALSE) AS legal_hold
           FROM employees 
-          WHERE status = 'TERMINATED';
+          WHERE status IN ('INACTIVE', 'TERMINATED');
       register: inactive_hr_users
 
     - name: Query User-to-Group Mappings from PostgreSQL
@@ -123,4 +139,4 @@
     - name: Execute Bulk Active Directory Sync Script
       ansible.windows.win_shell: powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\sync_users.ps1
       environment:
-        DEFAULT_PASSWORD: "{{ default_user_password | default(vault_default_user_password | default('')) }}"
+        DEFAULT_PASSWORD: "{{ default_user_password | default(vault_default_user_password | default('Welcome2026!')) }}"
