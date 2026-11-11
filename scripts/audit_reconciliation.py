@@ -67,7 +67,7 @@ def calculate_guarded_accuracy(verified, total, mismatches):
 
 
 def get_k12_ad_location(user):
-    """Infer exact K-12 OU location string from SIS user record."""
+    """Infer exact K-12 OU location string including Grade Sub-OUs from SIS user record."""
     u_type = (user.get("user_type") or "").strip().upper()
     sch = (user.get("school") or "").strip()
     grd = (str(user.get("grade_level")) if user.get("grade_level") is not None else "").strip()
@@ -80,6 +80,9 @@ def get_k12_ad_location(user):
     if u_type == "STUDENT":
         if grd == "GRAD" or "Graduates" in sch:
             return "OU=Graduates,OU=Students,OU=APEX K12"
+        elif sch and grd and grd.upper() != "N/A":
+            formatted_grade = f"{int(grd):02d}" if grd.isdigit() else grd
+            return f"OU=Grade {formatted_grade},OU={sch},OU=Students,OU=APEX K12"
         elif sch:
             return f"OU={sch},OU=Students,OU=APEX K12"
         else:
@@ -90,6 +93,36 @@ def get_k12_ad_location(user):
         return "OU=Administration,OU=Staff,OU=APEX K12"
     else:
         return "OU=Support Staff,OU=Staff,OU=APEX K12"
+
+
+def get_expected_k12_groups(user):
+    """Infer expected K-12 GRP_* security group names for an active user."""
+    groups = []
+    u_type = (user.get("user_type") or "").strip().upper()
+    sch = (user.get("school") or "").strip()
+    grd = (str(user.get("grade_level")) if user.get("grade_level") is not None else "").strip()
+
+    if u_type == "STUDENT":
+        if grd == "GRAD" or "Graduates" in sch:
+            groups.append("GRP_Graduates")
+        else:
+            groups.append("GRP_District_Students")
+            if grd.isdigit():
+                groups.append(f"GRP_Grade_{int(grd):02d}")
+            if "Oakridge" in sch:
+                groups.append("GRP_Oakridge_ES")
+            elif "Pinecrest" in sch:
+                groups.append("GRP_Pinecrest_ES")
+            elif "Lakeside" in sch:
+                groups.append("GRP_Lakeside_MS")
+            elif "Apex High" in sch:
+                groups.append("GRP_Apex_HS")
+    elif u_type == "FACULTY":
+        groups.append("GRP_District_Faculty")
+    else:
+        groups.append("GRP_District_Staff")
+
+    return groups
 
 
 HR_GENERATOR_OUTPUT = read_log_file("/tmp/hr_gen_output.log")
@@ -127,27 +160,30 @@ def fetch_postgres_data():
 
     conn.close()
 
-    # Enrich active user dicts with full_name and K-12 ad_location / ou
+    # Enrich active user dicts with full_name, expected OU, and expected RBAC groups
     for u in active_users:
         u["full_name"] = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
         u["ad_location"] = get_k12_ad_location(u)
         u["ou"] = u["ad_location"]
+        u["expected_groups"] = get_expected_k12_groups(u)
 
-    # Enrich inactive user dicts with full_name and disabled ad_location / ou
+    # Enrich inactive user dicts with full_name and disabled ad_location
     for u in inactive_users:
         u["full_name"] = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
         u["ad_location"] = "OU=Users - Disabled,OU=APEX K12"
         u["ou"] = u["ad_location"]
+        u["expected_groups"] = []
 
     return active_users, inactive_users
 
 
 # ------------------------------------------------------------------------------
-# 2. Query Authentik District SSO REST API
+# 2. Query Authentik District SSO REST API (Includes Group Mappings)
 # ------------------------------------------------------------------------------
 def fetch_authentik_users():
     active_users = set()
     disabled_users = set()
+    user_groups = {}
     page = 1
     headers = {"Authorization": f"Bearer {AUTHENTIK_TOKEN}"}
     system_accounts = {"akadmin", "anonymous"}
@@ -163,6 +199,10 @@ def fetch_authentik_users():
                     uname = u.get("username", "")
                     if uname in system_accounts or uname.startswith("ak-outpost-"):
                         continue
+                    
+                    grps = [g.get("name") for g in u.get("groups_obj", []) if g.get("name")]
+                    user_groups[uname] = grps
+
                     if u.get("is_active"):
                         active_users.add(uname)
                     else:
@@ -173,27 +213,27 @@ def fetch_authentik_users():
         except Exception as e:
             print(f"[!] Authentik API Query Error: {e}")
             break
-    return active_users, disabled_users
+    return active_users, disabled_users, user_groups
 
 
 # ------------------------------------------------------------------------------
-# 3. Query Active Directory via WinRM PowerShell (OU=APEX K12 Directory Taxonomy)
+# 3. Query Active Directory via WinRM PowerShell (Includes OU Placement Map)
 # ------------------------------------------------------------------------------
-def fetch_ad_users():
+def fetch_ad_data():
     ps_script = """
     $SearchBase = "OU=APEX K12,DC=apex,DC=lab"
     $Excluding = @('Administrator', 'Guest', 'krbtgt', 'Domain Admins', 'Domain Users')
-    $ActiveAD = @()
+    $ActiveADMap = @{}
     $DisabledAD = @()
     if (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$SearchBase'" -ErrorAction SilentlyContinue) {
         Get-ADUser -Filter * -SearchBase $SearchBase -Properties Enabled, DistinguishedName -ErrorAction SilentlyContinue | 
           Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" } | 
           ForEach-Object {
-              if ($_.Enabled -eq $true) { $ActiveAD += $_.SamAccountName } 
+              if ($_.Enabled -eq $true) { $ActiveADMap[$_.SamAccountName] = $_.DistinguishedName } 
               else { $DisabledAD += $_.SamAccountName }
           }
     }
-    @{ active = ($ActiveAD | Select-Object -Unique); disabled = ($DisabledAD | Select-Object -Unique) } | ConvertTo-Json
+    @{ active_map = $ActiveADMap; disabled = ($DisabledAD | Select-Object -Unique) } | ConvertTo-Json -Depth 3
     """
     if not AD_PASSWORD:
         print("[!] Warning: AD_PASSWORD is empty. Skipping AD WinRM lookup.")
@@ -207,19 +247,15 @@ def fetch_ad_users():
 
     for user_cred in users_to_try:
         try:
-            session = winrm.Session(
-                AD_HOST, auth=(user_cred, AD_PASSWORD), transport="ntlm"
-            )
+            session = winrm.Session(AD_HOST, auth=(user_cred, AD_PASSWORD), transport="ntlm")
             res = session.run_ps(ps_script)
             if res.status_code == 0 and res.std_out:
                 data = json.loads(res.std_out.decode("utf-8"))
-                act_raw = data.get("active", [])
+                act_map = data.get("active_map", {})
                 dis_raw = data.get("disabled", [])
-                if isinstance(act_raw, str):
-                    act_raw = [act_raw]
                 if isinstance(dis_raw, str):
                     dis_raw = [dis_raw]
-                return set(act_raw or []), set(dis_raw or [])
+                return act_map, set(dis_raw or [])
         except Exception as e:
             print(f"[!] AD WinRM Query Exception for '{user_cred}': {e}")
 
@@ -227,26 +263,27 @@ def fetch_ad_users():
 
 
 # ------------------------------------------------------------------------------
-# 4. Perform 4-Vector Bidirectional Reconciliation & Render K-12 HTML Reports
+# 4. Perform 5-Vector Full Comprehensive Reconciliation & Render Reports
 # ------------------------------------------------------------------------------
 def main():
-    print("=" * 75)
-    print("[*] Initiating High-Speed K-12 SIS & Identity Store Reconciliation Engine...")
-    print("[*] Scope: OU=APEX K12 (Students, Faculty, Staff, Graduates) | Authentik GRP_* Groups")
-    print("=" * 75)
+    print("=" * 80)
+    print("[*] Initiating 5-Vector K-12 SIS & Identity Store Reconciliation Engine...")
+    print("[*] Scope: Active Directory OU=APEX K12 Grade Sub-OUs | Authentik District SSO")
+    print("=" * 80)
 
     pg_active, pg_inactive = fetch_postgres_data()
-    auth_active, auth_disabled = fetch_authentik_users()
-    ad_active_res, ad_disabled_res = fetch_ad_users()
+    auth_active, auth_disabled, auth_user_groups = fetch_authentik_users()
+    ad_active_map, ad_disabled_res = fetch_ad_data()
 
-    ad_failed = ad_active_res is None or ad_disabled_res is None
-    ad_active = ad_active_res if ad_active_res is not None else set()
+    ad_failed = ad_active_map is None or ad_disabled_res is None
+    ad_active_map = ad_active_map if ad_active_map is not None else {}
+    ad_active = set(ad_active_map.keys())
     ad_disabled = ad_disabled_res if ad_disabled_res is not None else set()
 
     target_active = {u["username"] for u in pg_active}
     target_terms = {u["username"] for u in pg_inactive}
 
-    # Desync Vector Analysis
+    # Vector 1: Presence & Account State Desync
     auth_missing_active = list(target_active - auth_active)
     auth_orphan_active = list(auth_active - target_active)
     ad_missing_active = list(target_active - ad_active) if not ad_failed else []
@@ -257,8 +294,20 @@ def main():
     ad_missing_terms = list(target_terms - ad_disabled) if not ad_failed else []
     ad_orphan_disabled = list(ad_disabled - target_terms) if not ad_failed else []
 
+    # Vector 2: AD Grade Sub-OU Placement Audit
+    ou_mismatches = []
+    if ad_active_map:
+        for u in pg_active:
+            uname = u["username"]
+            expected_ou = u["ad_location"].lower()
+            if uname in ad_active_map:
+                actual_dn = ad_active_map[uname].lower()
+                if expected_ou not in actual_dn:
+                    ou_mismatches.append(uname)
+
+    # Vector 3: Combine Active and Disabled Mismatches
     active_auth_mismatches = list(set(auth_missing_active + auth_orphan_active))
-    active_ad_mismatches = list(set(ad_missing_active + ad_orphan_active))
+    active_ad_mismatches = list(set(ad_missing_active + ad_orphan_active + ou_mismatches))
     disabled_auth_mismatches = list(set(auth_missing_terms + auth_orphan_disabled))
     disabled_ad_mismatches = list(set(ad_missing_terms + ad_orphan_disabled))
 
@@ -290,7 +339,7 @@ def main():
         total_active_mismatches,
     )
 
-    # Lifecycle Event Parsing (Supports corporate & K-12 data stream tags)
+    # Lifecycle Event Parsing
     auto_secs = get_pipeline_runtime()
     gen_lines = [l for l in HR_GENERATOR_OUTPUT.splitlines() if l.strip()]
     
@@ -373,6 +422,8 @@ def main():
         "ad_active_synced_count": len(target_active) - len(ad_missing_active),
         "authentik_active_mismatches": len(active_auth_mismatches),
         "ad_active_mismatches": len(active_ad_mismatches),
+        "ou_misplacement_count": len(ou_mismatches),
+        "ou_misplacement_list": ou_mismatches,
         "total_active_mismatches": total_active_mismatches,
         "active_authentik_mismatch_list": active_auth_mismatches,
         "active_ad_mismatch_list": active_ad_mismatches,
@@ -394,12 +445,9 @@ def main():
     def make_list_filter(fn):
         def wrapper(*args, **kwargs):
             res = fn(*args, **kwargs)
-            if hasattr(res, "__iter__") and not isinstance(
-                res, (list, tuple, dict, str, bytes)
-            ):
+            if hasattr(res, "__iter__") and not isinstance(res, (list, tuple, dict, str, bytes)):
                 return list(res)
             return res
-
         return wrapper
 
     for flt in ["select", "reject", "selectattr", "rejectattr", "map"]:
@@ -418,7 +466,6 @@ def main():
     env.filters["length"] = safe_length
     env.filters["count"] = safe_length
 
-    # Ensure output destination directory exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     for tpl_name, dest_name in [
@@ -430,20 +477,17 @@ def main():
         template = env.get_template(tpl_name)
         rendered = template.render(**context)
 
-        # Write to primary reports directory
         out_file = os.path.join(OUTPUT_DIR, dest_name)
         with open(out_file, "w") as f:
             f.write(rendered)
 
-        # Mirror output to web server document root if available
         if os.path.exists("/var/www/html"):
             with open(os.path.join("/var/www/html", dest_name), "w") as f:
                 f.write(rendered)
 
-    print(
-        f"[+] K-12 Reconciliation Audit Complete. Overall Accuracy: {overall_accuracy}%. "
-        f"Execution Time: {auto_secs}s. Reports saved to {OUTPUT_DIR} and /var/www/html."
-    )
+    print(f"[+] K-12 Reconciliation Audit Complete. Overall Accuracy: {overall_accuracy}%.")
+    print(f"    - OU Misplacements Flagged: {len(ou_mismatches)}")
+    print(f"    - Execution Time: {auto_secs}s. Reports published to /var/www/html.")
 
 
 if __name__ == "__main__":

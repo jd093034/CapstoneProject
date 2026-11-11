@@ -5,12 +5,13 @@ import json
 import urllib.request
 import urllib.error
 import ssl
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 # --- Configuration from Environment Variables ---
-AUTHENTIK_URL = os.getenv("AUTHENTIK_URL", "https://sso.apex.lab").rstrip('/')
+AUTHENTIK_URL = os.getenv("AUTHENTIK_URL", "http://10.2.8.105:9000").rstrip('/')
 AUTHENTIK_TOKEN = os.getenv("AUTHENTIK_TOKEN")
 DB_HOST = os.getenv("DB_HOST", "10.2.8.106")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
@@ -33,20 +34,31 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-def http_request(url, method="GET", data=None, timeout=45):
+def http_request(url, method="GET", data=None, timeout=30, retries=3):
+    """Executes HTTP requests with robust retry logic for transient API drops."""
     body = json.dumps(data).encode("utf-8") if data else None
-    req = urllib.request.Request(url, data=body, headers=HEADERS, method=method)
-    try:
-        with urllib.request.urlopen(req, context=ssl_ctx, timeout=timeout) as resp:
-            if resp.status in (200, 201, 204):
-                content = resp.read().decode("utf-8")
-                return json.loads(content) if content else {}
-    except urllib.error.HTTPError as e:
-        if e.code in (400, 409):
-            return {"status": "exists", "code": e.code}
-        print(f"[!] HTTP Error {e.code} for {url}: {e.read().decode('utf-8')}")
-    except Exception as e:
-        print(f"[!] Request Exception for {url}: {e}")
+    
+    for attempt in range(1, retries + 1):
+        req = urllib.request.Request(url, data=body, headers=HEADERS, method=method)
+        try:
+            with urllib.request.urlopen(req, context=ssl_ctx, timeout=timeout) as resp:
+                if resp.status in (200, 201, 204):
+                    content = resp.read().decode("utf-8")
+                    return json.loads(content) if content else {}
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 409):
+                try:
+                    content = e.read().decode("utf-8")
+                    return {"status": "exists", "code": e.code, "details": json.loads(content)}
+                except Exception:
+                    return {"status": "exists", "code": e.code}
+            if attempt < retries:
+                time.sleep(0.2 * attempt)
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(0.2 * attempt)
+            else:
+                print(f"[!] Request Exception for {url} after {retries} attempts: {e}")
     return None
 
 def fetch_all_authentik_users():
@@ -183,7 +195,16 @@ def main():
             }
         }
         res = http_request(f"{AUTHENTIK_URL}/api/v3/core/users/", method="POST", data=payload)
-        return u["username"], res
+        
+        if res and "pk" in res:
+            return u["username"], res["pk"]
+        
+        # Fallback: Query direct user endpoint to recover PK if POST response was dropped/existed
+        query_res = http_request(f"{AUTHENTIK_URL}/api/v3/core/users/?username={u['username']}")
+        if query_res and query_res.get("results"):
+            return u["username"], query_res["results"][0]["pk"]
+            
+        return u["username"], None
 
     def activate_user(item):
         pk, uname = item
@@ -191,19 +212,20 @@ def main():
         res = http_request(f"{AUTHENTIK_URL}/api/v3/core/users/{pk}/", method="PATCH", data=payload)
         return uname, pk, res
 
-    # High-concurrency worker pool (50 threads)
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    # Throttled worker pool (25 threads) for socket stability
+    with ThreadPoolExecutor(max_workers=25) as executor:
         create_futures = [executor.submit(create_user, u) for u in users_to_create]
         activate_futures = [executor.submit(activate_user, item) for item in users_to_activate]
         
         for f in as_completed(create_futures):
-            uname, res = f.result()
-            if res and "pk" in res:
-                user_pk_map[uname] = res["pk"]
+            uname, pk = f.result()
+            if pk:
+                user_pk_map[uname] = pk
 
         for f in as_completed(activate_futures):
             uname, pk, res = f.result()
-            user_pk_map[uname] = pk
+            if pk:
+                user_pk_map[uname] = pk
 
     # 2. Evaluate Multi-Group Bindings (Direct in-memory lookup, 0ms network overhead)
     group_bind_tasks = []
@@ -227,7 +249,7 @@ def main():
         res = http_request(f"{AUTHENTIK_URL}/api/v3/core/groups/{group_pk}/add_user/", method="POST", data={"pk": user_pk})
         return uname, g_name, res
 
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=25) as executor:
         bind_futures = [executor.submit(bind_user_to_group, task) for task in group_bind_tasks]
         for f in as_completed(bind_futures):
             f.result()
