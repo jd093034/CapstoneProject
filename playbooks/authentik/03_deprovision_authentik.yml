@@ -15,43 +15,57 @@
     db_name: "hr_db"
 
   tasks:
-    - name: Fetch terminated employee records from PostgreSQL
-      community.postgresql.postgresql_query:
-        login_host: "{{ db_host }}"
-        login_port: "{{ db_port }}"
-        login_db: "{{ db_name }}"
-        login_user: "{{ vault_db_user }}"
-        login_password: "{{ vault_db_password }}"
-        query: |
-          SELECT 
-            username, 
-            email, 
-            COALESCE(terminated_at, NOW())::text AS terminated_at,
-            COALESCE(legal_hold, FALSE) AS legal_hold,
-            ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(terminated_at, NOW()))) / 86400) AS days_since_termination
-          FROM employees 
-          WHERE status = 'TERMINATED';
-      register: terminated_hr_users
-
-    - name: Execute High-Speed Parallel Authentik Deprovisioning & Retention
+    - name: Execute High-Speed Direct PostgreSQL & Authentik Deprovisioning Engine
       ansible.builtin.command:
         cmd: |
           python3 -c "
-          import urllib.request, json, ssl, time
+          import os, sys, urllib.request, json, ssl, time
           from concurrent.futures import ThreadPoolExecutor
+          import psycopg2
+          from psycopg2.extras import RealDictCursor
 
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
 
-          raw_url = '{{ vault_authentik_url }}'.rstrip('/')
-          token = '{{ vault_authentik_token }}'
+          raw_url = os.getenv('AUTHENTIK_URL', 'http://10.2.8.105:9000').rstrip('/')
+          token = os.getenv('AUTHENTIK_TOKEN')
+          db_host = os.getenv('DB_HOST', '10.2.8.106')
+          db_port = int(os.getenv('DB_PORT', '5432'))
+          db_name = os.getenv('DB_NAME', 'hr_db')
+          db_user = os.getenv('DB_USER', 'postgres')
+          db_pass = os.getenv('DB_PASSWORD', 'MySecretAnsibleToken123!')
+
           headers = {
               'Authorization': f'Bearer {token}',
               'Content-Type': 'application/json'
           }
 
-          # 1. Fetch existing users with page_size=1000 pagination
+          # 1. Fetch terminated identities directly from PostgreSQL database
+          try:
+              conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
+              with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                  cur.execute('''
+                      SELECT 
+                        username, 
+                        email, 
+                        COALESCE(terminated_at, NOW())::text AS terminated_at,
+                        COALESCE(legal_hold, FALSE) AS legal_hold,
+                        ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(terminated_at, NOW()))) / 86400) AS days_since_termination
+                      FROM employees 
+                      WHERE status = 'TERMINATED';
+                  ''')
+                  terminated_records = cur.fetchall()
+              conn.close()
+          except Exception as e:
+              print(f'[!] DB Query Error: {e}')
+              sys.exit(1)
+
+          if not terminated_records:
+              print('[*] No terminated accounts found in PostgreSQL.')
+              sys.exit(0)
+
+          # 2. Fetch existing users from Authentik (Page Size 1000)
           authentik_users = {}
           page = 1
           while True:
@@ -70,9 +84,7 @@
                   print(f'Fetch page {page} error: {e}')
                   break
 
-          # 2. Match PostgreSQL terminated records
-          terminated_records = {{ terminated_hr_users.query_result | default([]) | to_json }}
-
+          # 3. Categorize accounts for offboarding actions
           to_deactivate = []
           to_purge = []
 
@@ -82,15 +94,15 @@
                   user_obj = authentik_users[username]
                   pk = user_obj.get('pk')
                   is_active = user_obj.get('is_active', False)
-                  legal_hold = hr.get('legal_hold', False)
-                  days_since_term = int(hr.get('days_since_termination', 0))
+                  legal_hold = bool(hr.get('legal_hold', False))
+                  days_since_term = int(float(hr.get('days_since_termination') or 0))
 
                   if days_since_term <= 30 and is_active:
                       to_deactivate.append((username, pk))
                   elif days_since_term > 30 and not legal_hold:
                       to_purge.append((username, pk))
 
-          # 3. Parallel Deactivation worker
+          # 4. Parallel worker functions
           def deactivate(item):
               username, pk = item
               url = f'{raw_url}/api/v3/core/users/{pk}/'
@@ -101,7 +113,6 @@
               except Exception:
                   pass
 
-          # 4. Parallel Purge worker (>30 Days, No Legal Hold)
           def purge(item):
               username, pk = item
               url = f'{raw_url}/api/v3/core/users/{pk}/'
@@ -118,6 +129,14 @@
 
           print(f'[+] Authentik Deprovisioning Complete: Deactivated {len(to_deactivate)}, Purged {len(to_purge)} expired accounts.')
           "
+      environment:
+        AUTHENTIK_URL: "{{ vault_authentik_url }}"
+        AUTHENTIK_TOKEN: "{{ vault_authentik_token }}"
+        DB_HOST: "{{ db_host }}"
+        DB_PORT: "{{ db_port | string }}"
+        DB_NAME: "{{ db_name }}"
+        DB_USER: "{{ vault_db_user }}"
+        DB_PASSWORD: "{{ vault_db_password }}"
       register: deprov_result
 
     - name: Display Authentik Deprovisioning Execution Summary

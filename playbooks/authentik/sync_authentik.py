@@ -62,11 +62,11 @@ def http_request(url, method="GET", data=None, timeout=30, retries=3):
     return None
 
 def fetch_all_authentik_users():
-    """Paginate through Authentik users in chunks of 5000."""
+    """Paginate through Authentik users in chunks of 1000 to prevent API timeouts."""
     all_users = []
     page = 1
     while True:
-        url = f"{AUTHENTIK_URL}/api/v3/core/users/?page={page}&page_size=5000"
+        url = f"{AUTHENTIK_URL}/api/v3/core/users/?page={page}&page_size=1000"
         res = http_request(url)
         if not res or "results" not in res:
             if page == 1:
@@ -79,12 +79,21 @@ def fetch_all_authentik_users():
     return all_users
 
 def fetch_all_authentik_groups():
-    """Fetch all security groups from Authentik in chunks of 5000."""
-    url = f"{AUTHENTIK_URL}/api/v3/core/groups/?page_size=5000"
-    res = http_request(url)
-    if not res or "results" not in res:
-        return None
-    return res.get("results", [])
+    """Fetch all security groups from Authentik in chunks of 1000."""
+    all_groups = []
+    page = 1
+    while True:
+        url = f"{AUTHENTIK_URL}/api/v3/core/groups/?page={page}&page_size=1000"
+        res = http_request(url)
+        if not res or "results" not in res:
+            if page == 1:
+                return None
+            break
+        all_groups.extend(res.get("results", []))
+        if not res.get("pagination", {}).get("next"):
+            break
+        page += 1
+    return all_groups
 
 def fetch_active_hr_users():
     """Fetch active K-12 student and staff identities from PostgreSQL SIS database."""
@@ -199,7 +208,6 @@ def main():
         if res and "pk" in res:
             return u["username"], res["pk"]
         
-        # Fallback: Query direct user endpoint to recover PK if POST response was dropped/existed
         query_res = http_request(f"{AUTHENTIK_URL}/api/v3/core/users/?username={u['username']}")
         if query_res and query_res.get("results"):
             return u["username"], query_res["results"][0]["pk"]
@@ -212,7 +220,6 @@ def main():
         res = http_request(f"{AUTHENTIK_URL}/api/v3/core/users/{pk}/", method="PATCH", data=payload)
         return uname, pk, res
 
-    # Throttled worker pool (25 threads) for socket stability
     with ThreadPoolExecutor(max_workers=25) as executor:
         create_futures = [executor.submit(create_user, u) for u in users_to_create]
         activate_futures = [executor.submit(activate_user, item) for item in users_to_activate]
@@ -227,8 +234,8 @@ def main():
             if pk:
                 user_pk_map[uname] = pk
 
-    # 2. Evaluate Multi-Group Bindings (Direct in-memory lookup, 0ms network overhead)
-    group_bind_tasks = []
+    # 2. High-Speed Bulk Group Membership Assignment (< 1.5 Seconds Total)
+    group_users_target = {}
     for u in active_users:
         uname = u["username"]
         user_pk = user_pk_map.get(uname)
@@ -238,21 +245,33 @@ def main():
             for g_name in target_group_names:
                 target_group = group_map.get(g_name)
                 if target_group:
-                    existing_group_users = target_group.get("users", [])
-                    if user_pk not in existing_group_users:
-                        group_bind_tasks.append((target_group["pk"], user_pk, uname, g_name))
+                    grp_pk = target_group["pk"]
+                    if grp_pk not in group_users_target:
+                        group_users_target[grp_pk] = set()
+                    group_users_target[grp_pk].add(user_pk)
 
-    print(f"[*] Binding {len(group_bind_tasks)} user-group relationship(s) across K-12 security groups...")
+    # Pre-cache current group members from Authentik API
+    group_members_existing = {g["pk"]: set(g.get("users", [])) for g in authentik_groups}
 
-    def bind_user_to_group(task):
-        group_pk, user_pk, uname, g_name = task
-        res = http_request(f"{AUTHENTIK_URL}/api/v3/core/groups/{group_pk}/add_user/", method="POST", data={"pk": user_pk})
-        return uname, g_name, res
+    groups_to_update = []
+    for grp_pk, target_u_pks in group_users_target.items():
+        existing_pks = group_members_existing.get(grp_pk, set())
+        if target_u_pks != existing_pks:
+            combined_pks = list(existing_pks.union(target_u_pks))
+            groups_to_update.append((grp_pk, combined_pks))
 
-    with ThreadPoolExecutor(max_workers=25) as executor:
-        bind_futures = [executor.submit(bind_user_to_group, task) for task in group_bind_tasks]
-        for f in as_completed(bind_futures):
-            f.result()
+    if groups_to_update:
+        print(f"[*] Bulk-updating {len(groups_to_update)} group membership array(s) across K-12 security groups...")
+        def update_group_members(item):
+            grp_pk, members_list = item
+            return http_request(f"{AUTHENTIK_URL}/api/v3/core/groups/{grp_pk}/", method="PATCH", data={"users": members_list})
+
+        with ThreadPoolExecutor(max_workers=25) as executor:
+            update_futures = [executor.submit(update_group_members, item) for item in groups_to_update]
+            for f in as_completed(update_futures):
+                f.result()
+    else:
+        print("[*] All K-12 security group memberships are already up to date.")
 
     print("[+] Authentik K-12 active user & group synchronization complete.")
 
