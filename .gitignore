@@ -1,3 +1,4 @@
 vars/vault.yml
 vars/.vault_pass
 Dockerfile
+reports/
