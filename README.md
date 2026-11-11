@@ -1,13 +1,11 @@
 # Capstone Project
 
 # TODO: 
-## Functions
-- Dynamic Password Generation
-  - Generate a cryotpgrahically secure random temp password
-  - Can also utilize Authentik "invitation/enrollment flow api" to generate one-time magic links to email to new hires
+## Function
  
-- Organizational Hierarchy
-  - Manager_id column to database
+- Users actually have different permissions or more Security Groups assigned to them
+  - Like if they were in tech/employee vs a student
+  - Microsoft licensing or something 
   - Add to AD, make a managers role with permissions
  
 - Real-Time Sync
@@ -16,8 +14,6 @@
 ## QoL
 
 - Email about Conflicts
-- Create a --check or audit playbook to check for Identity Drift
-- Nginx Dashboard & Control Panel
 - Backups of the Database to /backups
 
 # Commands
