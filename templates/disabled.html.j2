@@ -1,10 +1,16 @@
+<!-- Tells the web browser this is a modern HTML5 webpage -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Sets character encoding so special symbols (like •, ‹, ›) render properly -->
     <meta charset="UTF-8">
+    <!-- Makes the page layout scale cleanly on laptops, tablets, and phones -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Title displayed on the browser tab -->
     <title>HR Identity Lifecycle Report - Disabled Accounts</title>
     <style>
+        /* ":root" stores reusable color swatches (--variable-name) so our dark-mode theme
+           stays consistent across the entire dashboard without repeating hex color codes. */
         :root {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
@@ -20,6 +26,7 @@
             --border-color: #334155;
         }
 
+        /* Base page styling: dark slate background, light text, and clean system fonts */
         html, body {
             min-height: 100vh;
             margin: 0;
@@ -29,6 +36,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
+        /* Flexbox centers the dashboard and pushes the footer cleanly to the bottom of the screen */
         body {
             display: flex;
             flex-direction: column;
@@ -38,12 +46,14 @@
             box-sizing: border-box;
         }
 
+        /* Keeps the main dashboard width capped at 1100px so tables stay easy to read on wide monitors */
         .container {
             max-width: 1100px;
             width: 100%;
             margin: 0 auto;
         }
 
+        /* Top title bar: pushes the page title to the left and the red DISABLED badge to the right */
         .header {
             display: flex;
             justify-content: space-between;
@@ -64,6 +74,7 @@
             font-size: 14px;
         }
 
+        /* Pill-shaped red badge in the top-right showing total disabled/offboarded users */
         .status-badge {
             padding: 6px 16px;
             border-radius: 20px;
@@ -76,7 +87,7 @@
             border: 1px solid var(--accent-red);
         }
 
-        /* Navigation Bar */
+        /* Navigation Bar linking all 4 static HTML dashboard pages */
         .navbar {
             display: flex;
             gap: 12px;
@@ -102,12 +113,14 @@
             border-color: var(--accent-blue);
         }
 
+        /* Highlights whichever page tab the user is currently viewing */
         .nav-tab.active {
             color: #0f172a;
             background-color: var(--accent-blue);
             border-color: var(--accent-blue);
         }
 
+        /* Rounded container boxes used for the Audit, Telemetry, and Disabled Accounts sections */
         .card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -125,7 +138,7 @@
             letter-spacing: 0.3px;
         }
 
-        /* Metrics Grid */
+        /* Responsive grid: automatically fits metric cards side-by-side on desktop and wraps on smaller screens */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -162,7 +175,7 @@
             color: var(--accent-green);
         }
 
-        /* Warning Banner */
+        /* Red alert banner that only appears if a terminated user is still active in AD or Authentik */
         .warning-banner {
             background-color: rgba(239, 68, 68, 0.15);
             border: 1px solid var(--accent-red);
@@ -178,6 +191,7 @@
             color: #ffffff;
         }
 
+        /* Yellow pill badge shown when a terminated user is protected by an active Legal Hold */
         .badge-hold {
             background-color: rgba(250, 204, 21, 0.15);
             color: var(--accent-yellow);
@@ -195,6 +209,7 @@
             white-space: nowrap;
         }
 
+        /* Green badge showing "< 1s (Instant)" deprovision speed per account */
         .badge-speed {
             background-color: rgba(34, 197, 94, 0.15);
             color: var(--accent-green);
@@ -206,6 +221,7 @@
             white-space: nowrap;
         }
 
+        /* Keeps the Legal Hold status text and its Apply/Release button aligned side-by-side */
         .hold-cell {
             display: flex;
             align-items: center;
@@ -213,6 +229,7 @@
             white-space: nowrap;
         }
 
+        /* Interactive action button inside the Legal Hold table column */
         .btn-hold {
             padding: 4px 10px;
             font-size: 11px;
@@ -224,11 +241,13 @@
             white-space: nowrap;
         }
 
+        /* Dims the button and shows a "blocked" cursor while the backend API request is running */
         .btn-hold:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
 
+        /* Amber styling for "Apply Hold" button */
         .btn-hold.apply {
             background-color: #d97706;
             color: #ffffff;
@@ -238,6 +257,7 @@
             background-color: #b45309;
         }
 
+        /* Slate gray styling for "Release" button */
         .btn-hold.release {
             background-color: #4b5563;
             color: #ffffff;
@@ -247,6 +267,7 @@
             background-color: #374151;
         }
 
+        /* Full-width data table styling */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -273,11 +294,12 @@
             font-size: 14px;
         }
 
+        /* Prevents cells like usernames, dates, and badges from wrapping onto multiple lines */
         .td-nowrap {
             white-space: nowrap;
         }
 
-        /* Pagination Styles */
+        /* Bottom bar holding "Showing 1 to 10 of X entries" on the left and page buttons on the right */
         .pagination-wrapper {
             display: flex;
             justify-content: space-between;
@@ -344,17 +366,22 @@
         <div class="title-area">
             <h1>HR Identity Lifecycle Report</h1>
             <div class="timestamp">
+                {# Jinja2 logic ({% ... %}): converts Ansible's 24-hour military clock into a 12-hour AM/PM clock. #}
+                {# "% 12" gets the remainder after dividing by 12 (so 14:00 becomes 2); midnight/noon (0) becomes 12. #}
                 {% set hour_12 = ansible_facts['date_time']['hour'] | int % 12 %}
                 {% set hour_12 = 12 if hour_12 == 0 else hour_12 %}
                 {% set am_pm = 'PM' if (ansible_facts['date_time']['hour'] | int) >= 12 else 'AM' %}
+                {# Double curly braces {{ ... }} stamp the exact generation date, time, and timezone onto the page #}
                 Generated on {{ ansible_facts['date_time']['date'] }} at {{ "%02d" % hour_12 }}:{{ ansible_facts['date_time']['minute'] }}:{{ ansible_facts['date_time']['second'] }} {{ am_pm }} {{ ansible_facts['date_time']['tz'] }}
             </div>
         </div>
         <div class="status-badge">
+            {# Chained "| default(...)" checks dynamic_inactive_users first, then disabled_users, then [] so it never errors #}
             DISABLED ACCOUNTS ({{ dynamic_inactive_users | default(disabled_users | default([])) | length }})
         </div>
     </div>
 
+    <!-- Top navigation tabs connecting all 4 static HTML dashboard pages -->
     <nav class="navbar">
         <a href="index.html" class="nav-tab">Overview</a>
         <a href="active.html" class="nav-tab">Active Identities</a>
@@ -366,6 +393,8 @@
     <div class="card">
         <h2>Live System Synchronization Audit</h2>
 
+        {# "{% set ... %}" creates clean local variables with safe "| default(...)" fallbacks
+           so the page renders cleanly even right after an environment reset when all counts are 0. #}
         {% set total_disabled_count = dynamic_inactive_users | default(disabled_users | default([])) | length %}
         {% set target_terms = total_target_terms | default(total_disabled_count) %}
         {% set accuracy = sync_accuracy_rate | default(100.0) %}
@@ -375,20 +404,23 @@
         {% set ad_bad = ad_mismatches | default(0) %}
         {% set ak_bad = authentik_mismatches | default(0) %}
 
-        <!-- Reconciled Probe Metrics Grid -->
+        <!-- 4-Card Verification Summary Grid -->
         <div class="metrics-grid">
             <div class="metric-card">
                 <span class="metric-title">Sync Accuracy Rate</span>
+                {# Shows green if 100.0% of terminated users are properly disabled, or yellow if any mismatch was found #}
                 <span class="metric-value" style="color: {{ 'var(--accent-green)' if accuracy == 100.0 else 'var(--accent-yellow)' }};">
                     {{ accuracy }}%
                 </span>
                 <span class="metric-sub" style="color: var(--text-muted);">
+                    {# Shows verified endpoint checks across both AD and Authentik (target_terms * 2) #}
                     {{ total_verified_matches | default(target_terms * 2) }} / {{ total_probes_conducted | default(target_terms * 2) }} Users Verified
                 </span>
             </div>
             <div class="metric-card">
                 <span class="metric-title">Active Directory</span>
                 <span class="metric-value">{{ ad_synced }} / {{ target_terms }}</span>
+                {# "~" is Jinja2's text-joining symbol: glues the mismatch count onto ' Mismatches' #}
                 <span class="metric-sub" style="color: {{ 'var(--accent-green)' if ad_bad == 0 else 'var(--accent-red)' }};">
                     {{ '100% Synced' if ad_bad == 0 else ad_bad ~ ' Mismatches' }}
                 </span>
@@ -411,14 +443,16 @@
             </div>
         </div>
 
+        {# Conditional warning banner: only appears if a terminated user is still active in AD or Authentik #}
         {% if mismatches_cnt > 0 %}
         <div class="warning-banner">
             <strong>Sync Verification Warning:</strong> Detected {{ mismatches_cnt }} desynchronized endpoint state(s).
+            {# "| join(', ')" turns a list of out-of-sync usernames into a clean comma-separated string #}
             {% if authentik_mismatch_list is defined and authentik_mismatch_list | length > 0 %}
-                <br/>• <strong>Authentik SSO Remaining Active:</strong> {{ authentik_mismatch_list | join(', ') }}
+                <br/><strong>Authentik SSO Remaining Active:</strong> {{ authentik_mismatch_list | join(', ') }}
             {% endif %}
             {% if ad_mismatch_list is defined and ad_mismatch_list | length > 0 %}
-                <br/>• <strong>Active Directory Pending Disables:</strong> {{ ad_mismatch_list | join(', ') }}
+                <br/><strong>Active Directory Pending Disables:</strong> {{ ad_mismatch_list | join(', ') }}
             {% endif %}
         </div>
         {% endif %}
@@ -428,6 +462,8 @@
     <div class="card">
         <h2>Time-to-Deprovision Telemetry</h2>
         
+        {# Benchmark math: assumes 15 minutes of manual IT work per offboarded user across AD, Authentik, and DB;
+           divides by 60 and rounds to 1 decimal place to display hours saved once total time reaches 60+ mins. #}
         {% set cumulative_mins_saved = total_disabled_count * 15 %}
         {% set cumulative_hours_saved = (cumulative_mins_saved / 60) | round(1) %}
         {% set runtime = auto_secs | default('3.4') %}
@@ -447,11 +483,12 @@
             <div class="metric-card">
                 <span class="metric-title">SLA COMPLIANCE</span>
                 <span class="metric-value" style="color: var(--accent-blue);">100%</span>
+                <!-- "&lt;" is HTML's safe code for the "<" (less than) symbol so the browser doesn't mistake it for an HTML tag -->
                 <span class="metric-sub">Target: &lt; 24 Hours SLA</span>
             </div>
         </div>
 
-        <!-- Accent Border Cards -->
+        <!-- Bottom 3 Accent-Border Comparison Cards (Manual Baseline vs. Time Saved vs. Speedup) -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
             <div style="background-color: #0f172a; border: 1px solid var(--border-color); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
                 <span style="font-size: 12px; font-weight: 700; color: var(--accent-yellow); text-transform: uppercase; letter-spacing: 0.5px;">MANUAL SLA BASELINE</span>
@@ -461,6 +498,7 @@
             <div style="background-color: #0f172a; border: 1px solid var(--border-color); border-left: 4px solid var(--accent-purple); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 6px;">
                 <span style="font-size: 12px; font-weight: 700; color: var(--accent-purple); text-transform: uppercase; letter-spacing: 0.5px;">TOTAL TIME SAVED</span>
                 <span style="font-size: 24px; font-weight: 700; color: var(--accent-purple);">
+                    {# Automatically switches the display unit from minutes to hours once 60+ minutes have been saved #}
                     {% if cumulative_mins_saved >= 60 %}
                         {{ cumulative_hours_saved }} hrs
                     {% else %}
@@ -477,6 +515,7 @@
         </div>
     </div>
 
+    <!-- Disabled & Deprovisioned Accounts Table -->
     <div class="card">
         <h2>Disabled & Deprovisioned Accounts</h2>
         <table id="disabledTable">
@@ -497,6 +536,7 @@
                     <tr class="table-row">
                         <td class="td-nowrap"><code>{{ u.username if u.username is defined else 'N/A' }}</code></td>
                         <td class="td-nowrap">
+                            {# Fallback chain for Full Name: checks first+last name, then single name field, then username #}
                             {% if u.first_name is defined and u.last_name is defined and u.first_name and u.last_name and u.first_name != 'None' and u.last_name != 'None' %}
                                 {{ u.first_name }} {{ u.last_name }}
                             {% elif u.name is defined and u.name and u.name != 'None' %}
@@ -505,11 +545,16 @@
                                 {{ u.username if u.username is defined else 'N/A' }}
                             {% endif %}
                         </td>
+                        {# Shows department name, or defaults to 'General Operations' if blank/null (e.g., for students) #}
                         <td class="td-nowrap">{{ u.department if (u.department is defined and u.department and u.department != 'None' and u.department != 'null') else 'General Operations' }}</td>
+                        {# Cleans up ISO timestamps: replaces the 'T' separator with a space and slices [:19]
+                           to keep just "YYYY-MM-DD HH:MM:SS" without messy fractional microseconds. #}
                         <td class="td-nowrap">{{ (u.terminated_at | string | replace('T', ' '))[:19] if (u.terminated_at is defined and u.terminated_at and u.terminated_at != 'None') else 'N/A' }}</td>
                         <td class="td-nowrap"><span class="badge-speed">&lt; 1s (Instant)</span></td>
                         <td>
                             <div class="hold-cell">
+                                {# Checks whether legal_hold is active; renders either the yellow Exempt badge + Release button,
+                                   or "None" + Apply Hold button. Clicking the button triggers toggleLegalHold() below. #}
                                 {% set is_hold = u.legal_hold if u.legal_hold is defined else false %}
                                 {% if is_hold and is_hold != 'None' and is_hold != 'false' %}
                                     <span class="badge-hold">Exempt (Active Hold)</span>
@@ -523,6 +568,7 @@
                     </tr>
                     {% endfor %}
                 {% else %}
+                    {# Empty-state row shown when no disabled/terminated accounts exist in PostgreSQL #}
                     <tr>
                         <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
                             No disabled or offboarded accounts present.
@@ -532,6 +578,7 @@
             </tbody>
         </table>
 
+        {# Only render the bottom page-switcher bar if there are rows to paginate #}
         {% if accounts | length > 0 %}
         <div class="pagination-wrapper">
             <div class="pagination-info" id="paginationInfo">Showing 0 to 0 of 0 entries</div>
@@ -546,24 +593,33 @@
 </div>
 
 <script>
+// "async" lets this function send a web request to our backend API in the background
+// without freezing the browser tab while Ansible updates PostgreSQL.
 async function toggleLegalHold(username, holdState, btnElement) {
+    // Lock the clicked button and change its text to "Updating..." so the admin can't accidentally double-click it
     if (btnElement) {
         btnElement.disabled = true;
         btnElement.innerText = "Updating...";
     }
 
     try {
+        // "fetch('/api/hold', ...)" sends a POST request to our lightweight API wrapper behind Nginx,
+        // passing the username and new true/false hold state—which runs our Legal Hold Ansible playbook!
         const response = await fetch('/api/hold', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: username, hold_state: holdState })
         });
 
+        // Safely read any JSON error details returned by the backend (falls back to {} if empty)
         const data = await response.json().catch(() => ({}));
 
         if (response.ok) {
+            // Once Ansible finishes updating PostgreSQL and re-rendering disabled.html, reload the page
+            // so the updated yellow "Exempt (Active Hold)" badge appears immediately.
             window.location.reload();
         } else {
+            // If the backend returned an error, alert the user and restore the button to its original state
             alert('Backend Error:\n' + (data.error || 'Execution failed. Check backend logs.'));
             if (btnElement) {
                 btnElement.disabled = false;
@@ -571,6 +627,7 @@ async function toggleLegalHold(username, holdState, btnElement) {
             }
         }
     } catch (err) {
+        // Catch network connection drops and reset the button cleanly
         alert('Connection error: ' + err);
         if (btnElement) {
             btnElement.disabled = false;
@@ -579,21 +636,27 @@ async function toggleLegalHold(username, holdState, btnElement) {
     }
 }
 
+// Client-side pagination: slices the rendered table into clean 10-row pages in the browser
 document.addEventListener("DOMContentLoaded", function() {
     const rowsPerPage = 10;
     const tableBody = document.querySelector("#disabledTable tbody");
     if (!tableBody) return;
 
+    // Grab every user row (<tr class="table-row">) and turn them into a JavaScript array
     const rows = Array.from(tableBody.querySelectorAll("tr.table-row"));
     const totalRows = rows.length;
 
+    // Stop early if there are no disabled accounts to paginate
     if (totalRows === 0) return;
 
     let currentPage = 1;
+    // Math.ceil rounds up so e.g. 25 disabled users becomes 3 pages (10 + 10 + 5)
     const totalPages = Math.ceil(totalRows / rowsPerPage);
 
+    // Shows only the 10 rows belonging to the clicked page number and hides all other rows
     function displayPage(page) {
         currentPage = page;
+        // Calculate first and last row index for this page (Page 1 = rows 0..9, Page 2 = rows 10..19)
         const start = (page - 1) * rowsPerPage;
         const end = start + rowsPerPage;
 
@@ -605,21 +668,25 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
 
+        // Update the "Showing 1 to 10 of X entries" text label
         const currentEnd = Math.min(end, totalRows);
         const infoElem = document.getElementById("paginationInfo");
         if (infoElem) {
             infoElem.innerText = `Showing ${start + 1} to ${currentEnd} of ${totalRows} entries`;
         }
 
+        // Redraw the page buttons to highlight the new active page
         renderControls();
     }
 
+    // Dynamically builds the "< Prev", numbered page buttons, and "Next >" buttons
     function renderControls() {
         const controlsContainer = document.getElementById("paginationControls");
         if (!controlsContainer) return;
 
         controlsContainer.innerHTML = "";
 
+        // "< Prev" button (disabled on Page 1)
         const prevBtn = document.createElement("button");
         prevBtn.className = "page-btn";
         prevBtn.innerText = "‹ Prev";
@@ -627,12 +694,14 @@ document.addEventListener("DOMContentLoaded", function() {
         prevBtn.onclick = () => displayPage(currentPage - 1);
         controlsContainer.appendChild(prevBtn);
 
+        // Sliding window: keeps at most 5 page buttons visible at once so large tables don't overflow
         let startPage = Math.max(1, currentPage - 2);
         let endPage = Math.min(totalPages, startPage + 4);
         if (endPage - startPage < 4) {
             startPage = Math.max(1, endPage - 4);
         }
 
+        // Render each page number button and highlight the active page
         for (let i = startPage; i <= endPage; i++) {
             const pageBtn = document.createElement("button");
             pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
@@ -641,6 +710,7 @@ document.addEventListener("DOMContentLoaded", function() {
             controlsContainer.appendChild(pageBtn);
         }
 
+        // "Next >" button (disabled on the last page)
         const nextBtn = document.createElement("button");
         nextBtn.className = "page-btn";
         nextBtn.innerText = "Next ›";
@@ -649,6 +719,7 @@ document.addEventListener("DOMContentLoaded", function() {
         controlsContainer.appendChild(nextBtn);
     }
 
+    // Show Page 1 immediately when the page loads
     displayPage(1);
 });
 </script>

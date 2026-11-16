@@ -1,19 +1,25 @@
+# Three dashes mark the start of a YAML configuration file for Ansible
 ---
+# --- Playbook: Pull student/staff records from PostgreSQL and save them as JSON files ---
 - name: Extract Identity Lifecycle Data from PostgreSQL HR Database
+  # "hosts: localhost" runs this directly on our Linux Ansible control machine
   hosts: localhost
+  # Skip Ansible's automatic hardware/OS check at the beginning to save a couple of seconds
   gather_facts: false
+  # Load our encrypted password file (created with ansible-vault) so passwords aren't stored in plain text.
+  # {{ playbook_dir }} automatically points to whatever folder this playbook file is saved in.
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
+  # Connection details for our simulated SIS database running in PostgreSQL
   vars:
     db_host: "10.2.8.106"
     db_port: 5432
     db_name: "hr_db"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Query Active Employees with K-12 Attributes
-    # -------------------------------------------------------------------------
+    # --- 1. Grab all active students and staff from PostgreSQL ---
+    # Double curly braces {{ ... }} tell Ansible "plug in the saved variable value here."
     - name: Query Active Employees from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -21,6 +27,7 @@
         login_port: "{{ db_port }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
+        # The pipe "|" lets us write a clean multi-line SQL query instead of cramming it onto one line
         query: |
           SELECT 
             username, 
@@ -34,11 +41,10 @@
             status 
           FROM employees 
           WHERE status = 'ACTIVE';
+      # "register" saves everything PostgreSQL returns into a variable named active_hr_users
       register: active_hr_users
 
-    # -------------------------------------------------------------------------
-    # 2. Query Inactive Employees with Offboarding Metadata & K-12 Attributes
-    # -------------------------------------------------------------------------
+    # --- 2. Grab everyone who left or was terminated so we can disable/remove their accounts ---
     - name: Query Inactive Employees from PostgreSQL with Offboarding Metadata
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -57,15 +63,18 @@
             department, 
             email, 
             status,
+            -- COALESCE means: if terminated_at is blank in the database, use right now (NOW()) instead.
+            -- ::text turns the date into plain text so JSON can read it cleanly.
             COALESCE(terminated_at, NOW())::text AS terminated_at,
+            -- If legal_hold is blank in the database, treat it as FALSE (not on hold)
             COALESCE(legal_hold, FALSE) AS legal_hold
           FROM employees 
+          -- IN (...) matches anyone whose status is either INACTIVE or TERMINATED
           WHERE status IN ('INACTIVE', 'TERMINATED');
       register: inactive_hr_users
 
-    # -------------------------------------------------------------------------
-    # 3. Query User-to-Group Mappings from PostgreSQL
-    # -------------------------------------------------------------------------
+    # --- 3. Group active users by department ---
+    # array_agg(username) bundles all usernames in the same department into one list (like ["jsmith1", "adoe2"])
     - name: Query User-to-Group Mappings from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -76,44 +85,53 @@
         query: "SELECT department AS group, array_agg(username) AS members FROM employees WHERE status = 'ACTIVE' GROUP BY department;"
       register: hr_group_mappings
 
-    # -------------------------------------------------------------------------
-    # 4. Map PostgreSQL rows into dynamic pipeline facts
-    # -------------------------------------------------------------------------
+    # --- 4. Clean up the raw database results and store them as Ansible variables ---
+    # "set_fact" creates new variables mid-playbook so later steps can reuse them.
+    # "| flatten" unwraps any extra nested brackets around the SQL rows so we get a clean, flat list.
     - name: Map PostgreSQL rows into dynamic pipeline facts
       ansible.builtin.set_fact:
         dynamic_ad_users: "{{ active_hr_users.query_result | flatten }}"
         dynamic_inactive_users: "{{ inactive_hr_users.query_result | flatten }}"
+        # ">-" combines the lines below into one clean JSON text string without extra line breaks
         dynamic_user_group_assignments: >-
           [
+          {# {% for ... %} loops through every department row returned by PostgreSQL #}
           {% for row in hr_group_mappings.query_result | flatten %}
             {
               "group": "{{ row.group }}",
+              {# "| to_json" formats the member list into valid JSON array syntax #}
               "members": { "add": {{ row.members | to_json }} }
+            {# Add a comma after every item EXCEPT the last one, since trailing commas break JSON #}
             }{% if not loop.last %},{% endif %}
           {% endfor %}
           ]
 
-    # -------------------------------------------------------------------------
-    # 5. Stage Dynamic JSON Files
-    # -------------------------------------------------------------------------
+    # --- 5. Save the cleaned lists as JSON files in /tmp for the next playbooks to use ---
+    # "| to_nice_json" formats the data with neat spacing/indentation so it's easy to read.
+    # "mode: '0644'" sets standard Linux file permissions (owner can edit, everyone else can read).
     - name: Save active users to temp JSON file
       ansible.builtin.copy:
         content: "{{ {'dynamic_ad_users': dynamic_ad_users} | to_nice_json }}"
         dest: "/tmp/dynamic_ad_users.json"
         mode: '0644'
 
+    # Write the inactive/terminated user list to a second JSON file in /tmp
     - name: Save inactive users to temp JSON file
       ansible.builtin.copy:
         content: "{{ {'dynamic_inactive_users': dynamic_inactive_users} | to_nice_json }}"
         dest: "/tmp/dynamic_inactive_users.json"
         mode: '0644'
 
+    # Since dynamic_user_group_assignments was built as a text string above, "| from_json" reads it
+    # back as structured data first, then "| to_nice_json" formats it cleanly before saving.
     - name: Save group assignments to temp JSON file
       ansible.builtin.copy:
         content: "{{ dynamic_user_group_assignments | from_json | to_nice_json }}"
         dest: "/tmp/dynamic_user_group_assignments.json"
         mode: '0644'
 
+    # --- 6. Print all extracted data to Ansible's execution log for auditing ---
+    # "ansible.builtin.debug" with "var:" prints the full contents of each variable to the terminal log
     - name: Display Extracted Active HR Users Data
       ansible.builtin.debug:
         var: dynamic_ad_users

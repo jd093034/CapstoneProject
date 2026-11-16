@@ -1,17 +1,19 @@
+# Three dashes mark the start of a YAML playbook file for Ansible
 ---
-# =============================================================================
-# Play 1: Identify Expired Accounts & Purge from PostgreSQL & Authentik
-# =============================================================================
+# --- Play 1: Find accounts past the 30-day grace period and wipe them from PostgreSQL & Authentik ---
 - name: Identity Lifecycle - 30-Day Retention Automated Purge
+  # "hosts: localhost" runs this on our Linux Ansible control machine
   hosts: localhost
+  # "gather_facts: true" lets Ansible collect current system info/timestamps
   gather_facts: true
+  # Load our encrypted password file (created with ansible-vault) so secrets aren't in plain text
   vars_files:
     - /root/ansible/vars/vault.yml
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Query Expired Users (Terminated > 30 Days & No Legal Hold)
-    # -------------------------------------------------------------------------
+    # --- 1. Ask PostgreSQL which terminated users are past 30 days AND not on a legal hold ---
+    # Double curly braces {{ ... }} tell Ansible "plug in the saved variable value here."
+    # "| default(5432)" is a safety net: if db_port isn't set, use port 5432.
     - name: Fetch expired inactive accounts from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -19,25 +21,32 @@
         login_port: "{{ db_port | default(5432) }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
+        # The pipe "|" lets us write a clean multi-line SQL query.
+        # "NOW() - INTERVAL '30 days'" checks if their termination date is more than 30 days in the past.
+        # "(legal_hold IS FALSE OR legal_hold IS NULL)" protects any account frozen for an investigation/audit.
         query: |
           SELECT username, email 
           FROM employees 
           WHERE (status IN ('TERMINATED', 'INACTIVE') OR terminated_at IS NOT NULL)
             AND terminated_at < NOW() - INTERVAL '30 days'
             AND (legal_hold IS FALSE OR legal_hold IS NULL);
+      # "register" saves the database results into expired_users_query
       register: expired_users_query
 
+    # Save the query rows into a cleaner variable named expired_users (or an empty list [] if none were found)
     - name: Set fact for expired users list
       ansible.builtin.set_fact:
         expired_users: "{{ expired_users_query.query_result | default([]) }}"
 
+    # Print an audit summary to the terminal showing how many expired accounts were found and who they are.
+    # "| length" counts the items in the list; "| map(attribute='username') | list" pulls out just the usernames.
     - name: Display identified expired users for compliance audit
       ansible.builtin.debug:
         msg: "Found {{ expired_users | length }} accounts past 30-day retention window: {{ expired_users | map(attribute='username') | list }}"
 
-    # -------------------------------------------------------------------------
-    # 2. Authentik SSO Purge
-    # -------------------------------------------------------------------------
+    # --- 2. Permanently delete those expired accounts from Authentik SSO ---
+    # "ansible.builtin.uri" lets Ansible make web API calls directly without needing a separate Python script.
+    # "when: expired_users | length > 0" skips all the delete steps completely if nobody is past 30 days.
     - name: Fetch Authentik users for ID resolution
       ansible.builtin.uri:
         url: "{{ vault_authentik_url }}/api/v3/core/users/?page_size=1000"
@@ -48,6 +57,10 @@
       register: authentik_all_users
       when: expired_users | length > 0
 
+    # Authentik deletes users by their internal numeric ID ("pk") rather than username.
+    # ">-" combines the Jinja2 expression below into one clean result:
+    # "selectattr('username', 'in', ...)" filters Authentik's user list down to only our expired usernames,
+    # and "| map(attribute='pk') | list" grabs their matching numeric IDs.
     - name: Map expired usernames to Authentik PKs
       ansible.builtin.set_fact:
         expired_authentik_pks: >-
@@ -58,6 +71,9 @@
           }}
       when: expired_users | length > 0
 
+    # Send a DELETE web request for each expired user's numeric ID.
+    # "loop" runs this task once per ID in expired_authentik_pks, plugging each ID into {{ item }}.
+    # "status_code: [204, 404]" treats both 204 (deleted) and 404 (already gone) as success.
     - name: Permanently delete expired accounts from Authentik
       ansible.builtin.uri:
         url: "{{ vault_authentik_url }}/api/v3/core/users/{{ item }}/"
@@ -68,9 +84,9 @@
       loop: "{{ expired_authentik_pks | default([]) }}"
       when: expired_users | length > 0 and (expired_authentik_pks | default([]) | length > 0)
 
-    # -------------------------------------------------------------------------
-    # 3. PostgreSQL Database Purge
-    # -------------------------------------------------------------------------
+    # --- 3. Permanently delete those expired rows from PostgreSQL ---
+    # "WHERE username = ANY(%s)" deletes all expired users in one fast SQL query instead of one by one.
+    # "positional_args" safely plugs our list of usernames into %s (preventing SQL injection).
     - name: Delete expired records from employees table
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -85,9 +101,8 @@
           - "{{ expired_users | map(attribute='username') | list }}"
       when: expired_users | length > 0
 
-# =============================================================================
-# Play 2: Active Directory Purge (WinRM Session)
-# =============================================================================
+# --- Play 2: Permanently delete those same expired accounts from Active Directory ---
+# "hosts: win_dc" switches targets to our Windows Domain Controller over WinRM
 - name: Retention Purge - Remove Expired Objects from AD
   hosts: win_dc
   gather_facts: false
@@ -95,11 +110,17 @@
     - /root/ansible/vars/vault.yml
 
   tasks:
+    # Run PowerShell on the Windows DC to permanently remove each expired user.
+    # Because Play 2 is running on Windows, "hostvars['localhost']['expired_users']" reaches back to
+    # the Linux control machine's memory to grab the expired_users list we found in Play 1!
+    # "map('regex_replace', '^(.*)$', '\"$1\"') | join(',')" wraps each username in quotes ("jsmith1")
+    # and separates them with commas inside @(...) so PowerShell reads it as a proper list of strings.
     - name: Permanently remove expired users from Active Directory
       ansible.windows.win_powershell:
         script: |
           $UsersToPurge = @({{ hostvars['localhost']['expired_users'] | map(attribute='username') | map('regex_replace', '^(.*)$', '"$1"') | join(',') }})
           
+          # Check each username in Active Directory; if found, delete them without a "Yes/No" prompt (-Confirm:$false)
           foreach ($username in $UsersToPurge) {
               $adUser = Get-ADUser -Filter "SamAccountName -eq '$username'" -ErrorAction SilentlyContinue
               if ($adUser) {
@@ -109,13 +130,14 @@
           }
       when: hostvars['localhost']['expired_users'] | default([]) | length > 0
 
-# =============================================================================
-# Play 3: Refresh Dashboard Analytics
-# =============================================================================
+# --- Play 3: Refresh the live web dashboard so purged accounts disappear from the reports ---
 - name: Retention Purge - Sync Dashboard State
   hosts: localhost
   gather_facts: false
   tasks:
+    # Re-run the master pipeline with 0 hires, 0 transfers, and 0 terminations ("-e ...")
+    # purely to recount the database and regenerate the live Nginx HTML dashboard pages.
+    # The ">" folds the multi-line terminal command into one clean line.
     - name: Re-run Master Pipeline to update Nginx HTML reports
       ansible.builtin.command:
         cmd: >

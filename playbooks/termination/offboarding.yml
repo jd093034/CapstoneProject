@@ -1,33 +1,45 @@
+# Three dashes mark the start of a YAML playbook file for Ansible
 ---
-# =============================================================================
-# PLAY 1: Soft-disable selected users in PostgreSQL (Bulk SQL)
-# =============================================================================
+# --- Play 1: Mark selected active users as TERMINATED in PostgreSQL ---
 - name: Mass Offboard Active Users & Update PostgreSQL
+  # "hosts: localhost" runs this on our Linux Ansible control machine
   hosts: localhost
+  # "gather_facts: true" lets Ansible read the current system date/time for our reports
   gather_facts: true
 
+  # Load our encrypted password file (created with ansible-vault) so database/API passwords stay hidden
   vars_files:
     - "../../vars/vault.yml"
 
+  # Connection details for our simulated SIS database in PostgreSQL
   vars:
     db_host: "10.2.8.106"
     db_port: 5432
     db_name: "hr_db"
 
   tasks:
+    # Save the exact starting timestamp (in seconds + nanoseconds) to a temp file so we can
+    # calculate how long the entire offboarding pipeline took at the very end.
     - name: Record start epoch timestamp
       ansible.builtin.shell: "date +%s.%N > /tmp/pipeline_start_time"
 
+    # Ask PostgreSQL how many users are currently marked ACTIVE.
+    # Double curly braces {{ ... }} tell Ansible "plug in the saved variable value here."
     - name: Fetch total active user count
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
         login_host: "{{ db_host }}"
+        # "| default(5432)" is a safety net: if db_port isn't set, use 5432
         login_port: "{{ db_port | default(5432) }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
         query: "SELECT COUNT(*) AS count FROM employees WHERE status = 'ACTIVE';"
+      # "register" saves the database response into active_count_query
       register: active_count_query
 
+    # Print a clean banner showing how many active users are available to offboard.
+    # The inline "if ... is mapping else ..." handles two ways Ansible can return a SQL row:
+    # as a named dictionary (row.count) or as a plain list position (row[0]).
     - name: Display HR DB Status Banner
       ansible.builtin.debug:
         msg:
@@ -37,21 +49,30 @@
           - "  Active Users Available in PostgreSQL HR DB : [ {{ active_count_query.query_result[0].count if active_count_query.query_result[0] is mapping else active_count_query.query_result[0][0] }} ]"
           - "================================================================"
 
+    # Pause the playbook and ask the user how many accounts to offboard—UNLESS "offboard_count"
+    # was already passed in from the command line (using "-e offboard_count=50").
     - name: Prompt for offboard batch size
       ansible.builtin.pause:
         prompt: "  [>] Enter number of users to offboard (Default: 0): "
       register: user_count_prompt
       when: offboard_count is not defined
 
+    # Pick whichever number was provided (command-line flag first, otherwise typed prompt, otherwise 0)
+    # and "| int" converts that text into a real whole number.
     - name: Set offboard count fact
       ansible.builtin.set_fact:
         target_count: "{{ (offboard_count | default(user_count_prompt.user_input | default(0))) | int }}"
 
+    # Only print this message if the batch size is greater than 0 ("when: target_count > 0")
     - name: Display requested offboarding batch size
       ansible.builtin.debug:
         msg: "Processing bulk offboarding request for {{ target_count }} active users..."
       when: target_count > 0
 
+    # Update that exact number of ACTIVE users in PostgreSQL to TERMINATED in one fast SQL query.
+    # ">" folds the multi-line SQL query into one clean line.
+    # "%s" is a safe placeholder filled in by "positional_args" (prevents SQL injection).
+    # "RETURNING username" hands back the exact list of usernames that just got terminated.
     - name: Soft-disable selected users in PostgreSQL (Direct Subquery Update)
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -75,14 +96,19 @@
       register: update_result
       when: target_count > 0
 
+    # Pull just the usernames out of the SQL results into a clean list (target_term_usernames).
+    # "| map(attribute='username') | list" grabs the 'username' field from every returned row.
+    # "cacheable: true" saves this variable so later plays in this file can still read it.
     - name: Extract target batch usernames into global fact
       ansible.builtin.set_fact:
         target_term_usernames: "{{ update_result.query_result | default([]) | map(attribute='username') | list if (update_result.query_result is defined and update_result.query_result | length > 0 and update_result.query_result[0] is mapping) else (update_result.query_result | default([]) | map(attribute=0) | list) }}"
         cacheable: true
+      # Both conditions in this list must be true for this step to run
       when: 
         - target_count > 0
         - update_result.query_result is defined
 
+    # Show the exact usernames that were just marked TERMINATED in the database
     - name: Display offboarded target accounts
       ansible.builtin.debug:
         msg:
@@ -92,18 +118,15 @@
           - "----------------------------------------------------------------"
       when: target_count > 0
 
-# =============================================================================
-# PLAY 2 & 3: Sync state to downstream systems (Active Directory & Authentik)
-# =============================================================================
+# --- Play 2 & 3: Push those terminations out to Active Directory and Authentik ---
+# "import_playbook" runs our separate Active Directory and Authentik sync playbooks back-to-back
 - name: Sync Disablement State to Active Directory
   ansible.builtin.import_playbook: "../active_directory/site_ad.yml"
 
 - name: Sync Disablement State to Authentik
   ansible.builtin.import_playbook: "../authentik/site_authentik.yml"
 
-# =============================================================================
-# PLAY 4: Audit Endpoint Reconciliation & Render Web Dashboard Reports
-# =============================================================================
+# --- Play 4: Double-check that nobody slipped through the cracks & update the web dashboard ---
 - name: Query Enriched Database & Refresh Dashboard Reports
   hosts: localhost
   gather_facts: true
@@ -117,6 +140,7 @@
     db_name: "hr_db"
 
   tasks:
+    # Pull the updated list of remaining ACTIVE users for the dashboard's Active Identities page
     - name: Query active accounts from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -129,6 +153,7 @@
           FROM employees WHERE status = 'ACTIVE' ORDER BY username ASC;
       register: active_users_query
 
+    # Pull all TERMINATED users (with readable timestamps via TO_CHAR) for the Disabled Accounts page
     - name: Query terminated accounts from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -142,6 +167,9 @@
           FROM employees WHERE status = 'TERMINATED' ORDER BY terminated_at DESC;
       register: inactive_users_query
 
+    # Verification probe: ask Authentik's API for everyone who is STILL active ("is_active=true").
+    # Later we compare this against our terminated list to prove 0 terminated users still have SSO access.
+    # "ignore_errors: true" keeps the dashboard build going even if Authentik is temporarily unreachable.
     - name: Audit live active users in Authentik API for desync probe
       ansible.builtin.uri:
         url: "{{ vault_authentik_url }}/api/v3/core/users/?is_active=true&page_size=1000"
@@ -155,6 +183,7 @@
       register: authentik_audit_check
       ignore_errors: true
 
+    # Format terminated records into audit log rows for the dashboard's System Logs page
     - name: Query audit log events from PostgreSQL
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -172,6 +201,8 @@
           ORDER BY terminated_at DESC;
       register: audit_logs_query
 
+    # Prepare clean lists and 12-hour clock variables for the HTML dashboard templates.
+    # "% 12" converts 24-hour military time (like 14:00) into 12-hour format (2 PM).
     - name: Map dynamic reconciliation facts and template telemetry
       ansible.builtin.set_fact:
         hour_12: "{{ (ansible_facts['date_time']['hour'] | int % 12) if (ansible_facts['date_time']['hour'] | int % 12 != 0) else 12 }}"
@@ -183,17 +214,23 @@
         all_term_usernames: "{{ inactive_users_query.query_result | default([]) | map(attribute='username') | list if (inactive_users_query.query_result is defined and inactive_users_query.query_result | length > 0 and inactive_users_query.query_result[0] is mapping) else (inactive_users_query.query_result | default([]) | map(attribute=0) | list) }}"
         authentik_active_usernames: "{{ authentik_audit_check.json.results | default([]) | map(attribute='username') | list }}"
 
+    # "| intersect(...)" finds any overlap between people who SHOULD be terminated (all_term_usernames)
+    # and people who are STILL active in Authentik (authentik_active_usernames). An empty list [] means 100% accuracy!
     - name: Compute mismatch counts and accuracy percentages
       ansible.builtin.set_fact:
         total_target_terms: "{{ all_term_usernames | length }}"
         authentik_mismatch_list: "{{ all_term_usernames | intersect(authentik_active_usernames) }}"
         ad_mismatch_list: []
 
+    # Subtract the start timestamp saved in Play 1 from the current time (time.time()) to get total runtime in seconds
     - name: Calculate actual execution runtime
       ansible.builtin.shell: |
         python3 -c 'import time, os; start_file = "/tmp/pipeline_start_time"; print(round(time.time() - float(open(start_file).read().strip()), 1)) if os.path.exists(start_file) else print(12.0)'
       register: runtime_calc
 
+    # Calculate final accuracy %, verified match counts, and service health badges for the HTML dashboard.
+    # "[..., 0] | max" guarantees counts never dip below zero; "| round(1)" rounds percentages to 1 decimal place.
+    # If authentik_mismatch_list has 0 people in it, auth_stat is marked "SUCCESS", otherwise "FAILED".
     - name: Finalize dashboard variables
       ansible.builtin.set_fact:
         auto_secs: "{{ runtime_calc.stdout | float }}"
@@ -217,6 +254,7 @@
         pct_reduction: 98.2
         speedup_factor: 22
 
+    # Build the 4 live HTML dashboard pages from our Jinja2 (.j2) templates and save them to Nginx's web folder
     - name: Render Overview Report
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../../templates/index.html.j2"

@@ -1,22 +1,24 @@
+# Three dashes mark the start of a YAML playbook file for Ansible
 ---
-# =============================================================================
-# Play 1: PostgreSQL & Authentik Cleanup (Runs on Host)
-# =============================================================================
+# --- Play 1: Wipe test data from PostgreSQL and Authentik SSO ---
 - name: Environment Reset - Wipe Database and Authentik
+  # "hosts: localhost" runs this on our Linux Ansible machine, which talks to PostgreSQL and Authentik over the network
   hosts: localhost
+  # Skip Ansible's automatic system check at the start to save a couple of seconds
   gather_facts: false
+  # Load our encrypted password file (created with ansible-vault) so secrets aren't stored in plain text
   vars_files:
     - /root/ansible/vars/vault.yml
 
+  # Connection details for our simulated SIS database in PostgreSQL
   vars:
     db_host: "10.2.8.106"
     db_port: 5432
     db_name: "hr_db"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. PostgreSQL Cleanup (Bulk Truncate - Instant)
-    # -------------------------------------------------------------------------
+    # Step 1: Instantly empty all database tables in PostgreSQL.
+    # Double curly braces {{ ... }} tell Ansible to plug in our saved variable values here.
     - name: Purge PostgreSQL HR database tables
       community.postgresql.postgresql_query:
         login_db: "{{ db_name }}"
@@ -24,6 +26,10 @@
         login_port: "{{ db_port }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
+        # The pipe "|" lets us write a multi-line SQL block.
+        # "DO $$ ... $$" runs a small inline SQL script that finds every table in our 'public' schema,
+        # glues their names together with commas (string_agg), and runs TRUNCATE TABLE ... CASCADE
+        # to wipe all rows instantly (much faster than deleting row by row).
         query: |
           DO $$ 
           DECLARE 
@@ -39,32 +45,38 @@
               END IF;
           END $$;
 
-    # -------------------------------------------------------------------------
-    # 2. Authentik Bulk Cleanup (Page Size 5000 with 120s Extended Timeout)
-    # -------------------------------------------------------------------------
+    # Step 2a: Delete all synced test users from Authentik via its web API (while keeping built-in admin accounts safe)
     - name: Bulk purge non-system users from Authentik
       ansible.builtin.command:
+        # "python3 -c" runs an inline Python script directly from the playbook
         cmd: |
           python3 -c "
           import urllib.request, json, ssl, sys, time
+          # ThreadPoolExecutor lets Python send 30 delete requests at the same time instead of one by one
           from concurrent.futures import ThreadPoolExecutor
 
+          # Ignore self-signed SSL certificate warnings on our internal Proxmox lab network
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
 
+          # Ansible plugs our secret Authentik URL and API token into these strings before Python runs.
+          # .rstrip('/') trims any trailing slash off the URL so we don't end up with '//api'.
           raw_url = '{{ vault_authentik_url }}'.rstrip('/')
           token = '{{ vault_authentik_token }}'
 
+          # Attach our secret Bearer token so Authentik gives us permission to list and delete users
           headers = {
               'Authorization': f'Bearer {token}',
               'Content-Type': 'application/json'
           }
 
           users = []
+          # Safety list: never delete Authentik's built-in admin or anonymous system accounts
           system_accounts = {'akadmin', 'anonymous'}
           page = 1
 
+          # Grab all existing Authentik users in big pages of 5,000 until there are no pages left
           while True:
               url = f'{raw_url}/api/v3/core/users/?page={page}&page_size=5000'
               req = urllib.request.Request(url, headers=headers)
@@ -80,6 +92,7 @@
                   print(f'[!] ERROR: Authentik user query failed on page {page}: {e}', file=sys.stderr)
                   sys.exit(1)
 
+          # Collect the numeric ID ('pk') of every user EXCEPT system accounts and Authentik outpost service accounts
           to_delete = [
               u['pk'] for u in users 
               if u.get('username') not in system_accounts 
@@ -88,6 +101,7 @@
 
           print(f'[*] Found {len(to_delete)} accounts to delete from Authentik.')
 
+          # Worker function that deletes one user by ID ('pk'), retrying up to 3 times if Authentik briefly hiccups
           def delete_user(pk):
               del_url = f'{raw_url}/api/v3/core/users/{pk}/'
               del_req = urllib.request.Request(del_url, headers=headers, method='DELETE')
@@ -99,12 +113,14 @@
                       time.sleep(0.2)
               return False
 
+          # Run 30 parallel workers at once and count how many deletions returned True
           with ThreadPoolExecutor(max_workers=30) as executor:
               results = list(executor.map(delete_user, to_delete))
 
           print(f'[+] Successfully purged {results.count(True)} / {len(to_delete)} accounts.')
           "
 
+    # Step 2b: Delete all custom K-12 security groups from Authentik (keeping built-in admin groups safe)
     - name: Bulk purge custom groups from Authentik
       ansible.builtin.command:
         cmd: |
@@ -127,6 +143,7 @@
           groups = []
           page = 1
 
+          # Fetch all groups from Authentik in chunks of 5,000
           while True:
               url = f'{raw_url}/api/v3/core/groups/?page={page}&page_size=5000'
               req = urllib.request.Request(url, headers=headers)
@@ -142,6 +159,7 @@
                   print(f'[!] ERROR: Authentik group query failed on page {page}: {e}', file=sys.stderr)
                   sys.exit(1)
 
+          # Safety filter: only delete custom groups—never delete superuser groups or 'authentik Admins'
           to_delete = [
               g['pk'] for g in groups 
               if not g.get('is_superuser') 
@@ -167,9 +185,9 @@
           print(f'[+] Successfully purged {results.count(True)} / {len(to_delete)} groups.')
           "
 
-    # -------------------------------------------------------------------------
-    # 3. Local Dashboard Dynamic State JSON Reset
-    # -------------------------------------------------------------------------
+    # Step 3: Overwrite our temporary JSON staging files with an empty list ('[]')
+    # "loop" runs this copy step 4 times, plugging each file path below into {{ item }}.
+    # "ignore_errors: true" keeps the reset going even if one of the files doesn't exist yet.
     - name: Reset dynamic report state JSON files
       ansible.builtin.copy:
         content: '[]'
@@ -182,9 +200,8 @@
         - /tmp/dynamic_user_group_assignments.json
       ignore_errors: true
 
-# =============================================================================
-# Play 2: Active Directory K-12 Cleanup (Single-Session Bulk Array Purge)
-# =============================================================================
+# --- Play 2: Wipe test users and security groups from Active Directory ---
+# "hosts: win_dc" switches targets to our Windows Server 2022 Domain Controller
 - name: Environment Reset - Wipe Active Directory
   hosts: win_dc
   gather_facts: false
@@ -192,11 +209,14 @@
     - /root/ansible/vars/vault.yml
 
   tasks:
+    # Run PowerShell directly on the Windows DC to delete all test student/staff accounts
     - name: Bulk remove active & disabled users from AD K-12 containers
       ansible.windows.win_powershell:
         script: |
           Import-Module ActiveDirectory
+          # @(...) makes a list of built-in Windows accounts we must NEVER delete
           $Excluding = @('Administrator', 'Guest', 'krbtgt', 'Domain Admins', 'Domain Users')
+          # List of K-12 folders (and old lab folders) to clean out
           $SearchBases = @(
               "OU=APEX K12,DC=apex,DC=lab",
               "OU=Users - Disabled,OU=APEX K12,DC=apex,DC=lab",
@@ -206,21 +226,27 @@
           )
 
           foreach ($base in $SearchBases) {
+              # First check if the folder exists so we don't get an error on missing folders
               if (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$base'" -ErrorAction SilentlyContinue) {
+                  # -SearchScope Subtree grabs everyone inside that folder AND all grade subfolders underneath it.
+                  # Where-Object filters out our $Excluding safety list and any Exchange HealthMailbox accounts.
                   $users = Get-ADUser -Filter * -SearchBase $base -SearchScope Subtree -ErrorAction SilentlyContinue | 
                     Where-Object { $Excluding -notcontains $_.Name -and $_.Name -notlike "HealthMailbox*" }
                   
                   if ($users) {
+                      # Pipe "|" the list straight into Remove-ADUser; -Confirm:$false skips the "Are you sure?" prompt
                       $users | Remove-ADUser -Confirm:$false -ErrorAction SilentlyContinue
                       Write-Host "[-] Purged $($users.Count) user(s) from $base"
                   }
               }
           }
 
+    # Same bulk cleanup for our custom K-12 security groups (GRP_District_Students, GRP_Grade_05, etc.)
     - name: Bulk remove GRP_ and department security groups from AD
       ansible.windows.win_powershell:
         script: |
           Import-Module ActiveDirectory
+          # Protect Windows' built-in domain security groups
           $Excluding = @('Domain Admins', 'Domain Users', 'Domain Guests', 'Enterprise Admins', 'Schema Admins')
           $GroupBases = @(
               "OU=Groups,OU=APEX K12,DC=apex,DC=lab",
@@ -240,16 +266,17 @@
               }
           }
 
-# =============================================================================
-# Play 3: Reset Web Dashboard Reports (Direct Local Publish)
-# =============================================================================
+# --- Play 3: Reset the live Nginx web dashboard back to zero ---
 - name: Environment Reset - Publish Clean Slate Web Dashboard
   hosts: localhost
+  # "gather_facts: true" is turned ON here so the HTML templates can read the current date/time from Ansible
   gather_facts: true
   vars_files:
     - /root/ansible/vars/vault.yml
 
   tasks:
+    # "ansible.builtin.template" fills in our Jinja2 (.j2) web templates with empty/zero values
+    # and saves them directly into Nginx's web folder (/var/www/html/).
     - name: Render and publish reset HTML reports directly to Nginx web root
       ansible.builtin.template:
         src: "/root/ansible/templates/{{ item.src }}"
@@ -260,6 +287,7 @@
         - { src: "active.html.j2", dest: "active.html" }
         - { src: "disabled.html.j2", dest: "disabled.html" }
         - { src: "logs.html.j2", dest: "logs.html" }
+      # Zeroed-out dashboard counters and clean status flags passed into the HTML templates
       vars:
         sync_result:
           rc: 0
@@ -279,6 +307,7 @@
         total_active_managed: 0
         est_time_saved_mins: 0
 
+    # Print final confirmation message when all 3 reset plays finish
     - name: Reset confirmation message
       ansible.builtin.debug:
         msg: "Environment reset complete. All backend systems purged and web dashboard reset to clean state."

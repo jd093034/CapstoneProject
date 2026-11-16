@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# The line above tells Linux to run this script using Python 3
+
+# Built-in Python tools for JSON data, file paths, SSL certificates, system exit, timers, web requests, and timestamps
 import json
 import os
 import ssl
@@ -7,29 +10,50 @@ import time
 import urllib.request
 from datetime import datetime
 
+# Jinja2 renders our HTML dashboard templates (.j2 files) into finished web pages
 from jinja2 import Environment, FileSystemLoader
+# psycopg2 connects Python to PostgreSQL; RealDictCursor lets us read columns by name (like u["username"])
 import psycopg2
 from psycopg2.extras import RealDictCursor
+# pywinrm lets Python send PowerShell commands remotely to our Windows Domain Controller over WinRM
 import winrm
 
-# --- Environment Variables ---
-AUTHENTIK_URL = os.getenv("AUTHENTIK_URL", "http://10.2.8.105:9000").rstrip("/")
+# --- Configuration from Environment Variables (Injected by Ansible Vault) ---
+# Ansible decrypts vars/vault.yml and passes these variables privately via the task's
+# "environment:" block so zero credentials or vault values are ever hardcoded in Python.
+AUTHENTIK_URL = os.getenv("AUTHENTIK_URL", "").rstrip("/")
 AUTHENTIK_TOKEN = os.getenv("AUTHENTIK_TOKEN")
 DB_HOST = os.getenv("DB_HOST", "10.2.8.106")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "hr_db")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "MySecretAnsibleToken123!")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 AD_HOST = os.getenv("AD_HOST", "10.2.8.67")
-AD_USER = os.getenv("AD_USER", "Administrator")
-AD_PASSWORD = os.getenv("AD_PASSWORD", "ApexPassword123!")
+AD_USER = os.getenv("AD_USER")
+AD_PASSWORD = os.getenv("AD_PASSWORD")
 AD_DOMAIN = os.getenv("AD_DOMAIN", "apex.lab")
 
+# Fail immediately if any required Ansible Vault environment variable was not injected
+required_env_vars = {
+    "AUTHENTIK_URL": AUTHENTIK_URL,
+    "AUTHENTIK_TOKEN": AUTHENTIK_TOKEN,
+    "DB_USER": DB_USER,
+    "DB_PASSWORD": DB_PASSWORD,
+    "AD_USER": AD_USER,
+    "AD_PASSWORD": AD_PASSWORD,
+}
+missing_vars = [name for name, value in required_env_vars.items() if not value]
+if missing_vars:
+    print(f"[!] ERROR: Missing required Ansible Vault environment variable(s): {', '.join(missing_vars)}")
+    sys.exit(1)
+
+# Folders where Jinja2 reads the .j2 templates and writes the finished .html report pages
 TEMPLATES_DIR = "/root/ansible/templates"
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/root/ansible/reports")
 
 
 # --- Helper Functions & Logging ---
+# Safely reads a staged log file from /tmp into text (returns "" if the file doesn't exist yet)
 def read_log_file(filepath):
     if os.path.exists(filepath):
         try:
@@ -40,6 +64,8 @@ def read_log_file(filepath):
     return ""
 
 
+# Calculates total pipeline runtime in seconds by subtracting the start timestamp saved in Phase 0
+# from the current clock time (falls back to the SIS generator log's modification time, or 12.0s).
 def get_pipeline_runtime():
     start_file = "/tmp/pipeline_start_time"
     if os.path.exists(start_file):
@@ -57,6 +83,9 @@ def get_pipeline_runtime():
     return 12.0
 
 
+# Calculates verification accuracy percentage.
+# Safety guard: if even 1 mismatch exists out of thousands of checks, cap the display at 99.9%
+# so rounding (like 99.96%) never falsely displays "100.0%" when an error actually occurred!
 def calculate_guarded_accuracy(verified, total, mismatches):
     if total <= 0:
         return 100.0
@@ -66,6 +95,8 @@ def calculate_guarded_accuracy(verified, total, mismatches):
     return acc
 
 
+# Predicts the exact Active Directory Organizational Unit (OU) path where an active user SHOULD live
+# based on their role, school campus, and grade level in PostgreSQL.
 def get_k12_ad_location(user):
     """Infer exact K-12 OU location string including Grade Sub-OUs from SIS user record."""
     u_type = (user.get("user_type") or "").strip().upper()
@@ -77,10 +108,12 @@ def get_k12_ad_location(user):
         if sch in ["Oakridge Elementary", "Pinecrest Elementary", "Lakeside Middle School", "Apex High School", "Graduates"] or grd.isdigit() or grd == "GRAD":
             u_type = "STUDENT"
 
+    # Build the exact OU path matching our PowerShell AD provisioning rules
     if u_type == "STUDENT":
         if grd == "GRAD" or "Graduates" in sch:
             return "OU=Graduates,OU=Students,OU=APEX K12"
         elif sch and grd and grd.upper() != "N/A":
+            # :02d pads single-digit grades with a leading zero (e.g., "5" -> "05")
             formatted_grade = f"{int(grd):02d}" if grd.isdigit() else grd
             return f"OU=Grade {formatted_grade},OU={sch},OU=Students,OU=APEX K12"
         elif sch:
@@ -95,6 +128,7 @@ def get_k12_ad_location(user):
         return "OU=Support Staff,OU=Staff,OU=APEX K12"
 
 
+# Predicts all K-12 GRP_* role-based security groups an active user SHOULD belong to
 def get_expected_k12_groups(user):
     """Infer expected K-12 GRP_* security group names for an active user."""
     groups = []
@@ -125,9 +159,11 @@ def get_expected_k12_groups(user):
     return groups
 
 
+# Load the staged log files saved during Phases 1 and 2 of the master pipeline
 HR_GENERATOR_OUTPUT = read_log_file("/tmp/hr_gen_output.log")
 PIPELINE_STDOUT = read_log_file("/tmp/pipeline_stdout.log")
 
+# Tell Python to accept Authentik's self-signed lab HTTPS certificate without throwing an error
 ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
@@ -136,6 +172,7 @@ ssl_ctx.verify_mode = ssl.CERT_NONE
 # ------------------------------------------------------------------------------
 # 1. Query PostgreSQL (K-12 SIS Source of Truth)
 # ------------------------------------------------------------------------------
+# Connects to PostgreSQL and pulls the ground-truth lists of ACTIVE and TERMINATED users
 def fetch_postgres_data():
     conn = psycopg2.connect(
         host=DB_HOST,
@@ -180,14 +217,17 @@ def fetch_postgres_data():
 # ------------------------------------------------------------------------------
 # 2. Query Authentik District SSO REST API (Includes Group Mappings)
 # ------------------------------------------------------------------------------
+# Fetches every non-system user currently in Authentik and splits them into active vs. disabled sets
 def fetch_authentik_users():
     active_users = set()
     disabled_users = set()
     user_groups = {}
     page = 1
     headers = {"Authorization": f"Bearer {AUTHENTIK_TOKEN}"}
+    # Ignore built-in Authentik system/outpost service accounts so they aren't flagged as orphan users
     system_accounts = {"akadmin", "anonymous"}
 
+    # Paginate through Authentik's user directory in chunks of 5,000 until no "next" page remains
     while True:
         url = f"{AUTHENTIK_URL}/api/v3/core/users/?page={page}&page_size=5000"
         req = urllib.request.Request(url, headers=headers)
@@ -219,6 +259,9 @@ def fetch_authentik_users():
 # ------------------------------------------------------------------------------
 # 3. Query Active Directory via WinRM PowerShell (Includes OU Placement Map)
 # ------------------------------------------------------------------------------
+# Connects remotely to our Windows Server 2022 Domain Controller over WinRM and runs a compact
+# PowerShell snippet that returns all enabled users (with their full DistinguishedName OU path)
+# and all disabled users as a single JSON payload.
 def fetch_ad_data():
     ps_script = """
     $SearchBase = "OU=APEX K12,DC=apex,DC=lab"
@@ -239,6 +282,7 @@ def fetch_ad_data():
         print("[!] Warning: AD_PASSWORD is empty. Skipping AD WinRM lookup.")
         return None, None
 
+    # Try standard username formats for NTLM authentication (Administrator, APEX\Administrator, Administrator@apex.lab)
     users_to_try = [AD_USER]
     if "\\" not in AD_USER and "@" not in AD_USER:
         domain_prefix = AD_DOMAIN.split(".")[0].upper() if "." in AD_DOMAIN else "APEX"
@@ -253,6 +297,7 @@ def fetch_ad_data():
                 data = json.loads(res.std_out.decode("utf-8"))
                 act_map = data.get("active_map", {})
                 dis_raw = data.get("disabled", [])
+                # PowerShell converts a 1-item array into a plain string unless wrapped back into a list
                 if isinstance(dis_raw, str):
                     dis_raw = [dis_raw]
                 return act_map, set(dis_raw or [])
@@ -271,6 +316,7 @@ def main():
     print("[*] Scope: Active Directory OU=APEX K12 Grade Sub-OUs | Authentik District SSO")
     print("=" * 80)
 
+    # Pull live state from all three systems: PostgreSQL (truth), Authentik SSO, and Active Directory
     pg_active, pg_inactive = fetch_postgres_data()
     auth_active, auth_disabled, auth_user_groups = fetch_authentik_users()
     ad_active_map, ad_disabled_res = fetch_ad_data()
@@ -280,10 +326,14 @@ def main():
     ad_active = set(ad_active_map.keys())
     ad_disabled = ad_disabled_res if ad_disabled_res is not None else set()
 
+    # Build Python sets of expected active vs. terminated usernames from PostgreSQL
     target_active = {u["username"] for u in pg_active}
     target_terms = {u["username"] for u in pg_inactive}
 
     # Vector 1: Presence & Account State Desync
+    # Using Python set subtraction (A - B):
+    # - target - endpoint = people who SHOULD be there/disabled, but are missing or still active
+    # - endpoint - target = "orphan" accounts that exist in AD/Authentik without an HR record
     auth_missing_active = list(target_active - auth_active)
     auth_orphan_active = list(auth_active - target_active)
     ad_missing_active = list(target_active - ad_active) if not ad_failed else []
@@ -295,6 +345,7 @@ def main():
     ad_orphan_disabled = list(ad_disabled - target_terms) if not ad_failed else []
 
     # Vector 2: AD Grade Sub-OU Placement Audit
+    # Verifies every active user in AD is sitting in their exact expected campus + grade sub-OU
     ou_mismatches = []
     if ad_active_map:
         for u in pg_active:
@@ -306,6 +357,7 @@ def main():
                     ou_mismatches.append(uname)
 
     # Vector 3: Combine Active and Disabled Mismatches
+    # set(...) deduplicates usernames so someone isn't counted twice across multiple checks
     active_auth_mismatches = list(set(auth_missing_active + auth_orphan_active))
     active_ad_mismatches = list(set(ad_missing_active + ad_orphan_active + ou_mismatches))
     disabled_auth_mismatches = list(set(auth_missing_terms + auth_orphan_disabled))
@@ -314,6 +366,7 @@ def main():
     total_active_mismatches = len(active_auth_mismatches) + len(active_ad_mismatches)
     total_disabled_mismatches = len(disabled_auth_mismatches) + len(disabled_ad_mismatches)
 
+    # "|" is Python's set union operator: counts the total unique accounts probed across truth + endpoint
     total_active_probes = len(target_active | auth_active) + (
         len(target_active | ad_active) if not ad_failed else 0
     )
@@ -324,7 +377,7 @@ def main():
     total_probes = total_active_probes + total_disabled_probes
     total_mismatches = total_active_mismatches + total_disabled_mismatches
 
-    # Guarded accuracy rates
+    # Guarded accuracy rates (overall, disabled-only, and active-only)
     overall_accuracy = calculate_guarded_accuracy(
         total_probes - total_mismatches, total_probes, total_mismatches
     )
@@ -340,6 +393,7 @@ def main():
     )
 
     # Lifecycle Event Parsing
+    # Count enrollments/hires, promotions/transfers, and withdrawals/terminations from the Phase 1 log
     auto_secs = get_pipeline_runtime()
     gen_lines = [l for l in HR_GENERATOR_OUTPUT.splitlines() if l.strip()]
     
@@ -348,8 +402,11 @@ def main():
     count_terms = len([l for l in gen_lines if "TERMINATED:" in l or "WITHDRAWN:" in l or "SEPARATED:" in l])
     
     total_events = count_hires + count_transfers + count_terms
+    # Multiply total events by our 15-minute manual K-12 IT baseline to compute time saved
     est_time_saved = total_events * 15
 
+    # Build a timestamp dictionary that mirrors Ansible's built-in ansible_facts['date_time'] structure
+    # so our Jinja2 HTML templates work identically whether rendered by Ansible or this Python engine.
     now = datetime.now()
     date_time_dict = {
         "year": now.strftime("%Y"),
@@ -372,6 +429,7 @@ def main():
         "stdout_lines": PIPELINE_STDOUT.splitlines(),
     }
 
+    # Master dictionary of all metrics, user lists, mismatch arrays, and status badges passed into Jinja2
     context = {
         "ansible_facts": {"date_time": date_time_dict},
         "ansible_date_time": date_time_dict,
@@ -434,14 +492,18 @@ def main():
         "pipeline_stdout": PIPELINE_STDOUT,
     }
 
+    # Initialize Jinja2 to load our .j2 HTML templates from /root/ansible/templates
     env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
 
+    # Register Ansible's custom JSON filters so standalone Python Jinja2 understands "| to_json", etc.
     env.filters["to_json"] = lambda v, *args, **kwargs: json.dumps(v)
     env.filters["to_nice_json"] = lambda v, *args, **kwargs: json.dumps(v, indent=2)
     env.filters["from_json"] = (
         lambda v, *args, **kwargs: json.loads(v) if isinstance(v, str) else v
     )
 
+    # Python 3 Jinja2 filters like "map" and "selectattr" return lazy generators instead of lists;
+    # this wrapper automatically converts them into concrete lists so "| length" works cleanly.
     def make_list_filter(fn):
         def wrapper(*args, **kwargs):
             res = fn(*args, **kwargs)
@@ -454,6 +516,7 @@ def main():
         if flt in env.filters:
             env.filters[flt] = make_list_filter(env.filters[flt])
 
+    # Safe "| length" / "| count" filter that never crashes on None or generator objects
     def safe_length(val):
         if val is None:
             return 0
@@ -468,6 +531,7 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+    # Render all 4 dashboard pages (Overview, Active, Disabled, Logs) and write them to disk
     for tpl_name, dest_name in [
         ("index.html.j2", "index.html"),
         ("active.html.j2", "active.html"),
@@ -481,6 +545,7 @@ def main():
         with open(out_file, "w") as f:
             f.write(rendered)
 
+        # Also publish directly to /var/www/html if running locally on the Nginx host
         if os.path.exists("/var/www/html"):
             with open(os.path.join("/var/www/html", dest_name), "w") as f:
                 f.write(rendered)
@@ -490,5 +555,6 @@ def main():
     print(f"    - Execution Time: {auto_secs}s. Reports published to /var/www/html.")
 
 
+# Standard Python entry point: runs main() only when this file is executed directly
 if __name__ == "__main__":
     main()

@@ -1,34 +1,49 @@
+# Three dashes mark the start of a YAML configuration file for Ansible
 ---
-# ==============================================================================
-# Sub-Playbook 2: Provision Active HR Users and Assign Group Memberships
-# ==============================================================================
+# --- Step 2: Sync active users and groups into Authentik SSO ---
 - name: Step 2 - Provision Active Users & Bind to Authentik Groups (High-Speed Parallel)
+  # "hosts: localhost" runs this directly on our Linux Ansible control machine—the Python script
+  # talks to PostgreSQL and Authentik's web API over the network, so it doesn't need SSH.
   hosts: localhost
+  # Skip Ansible's automatic hardware/OS check at the start to save a couple of seconds
   gather_facts: false
 
+  # Load our encrypted password file (created with ansible-vault) so secrets aren't in plain text.
+  # {{ playbook_dir }} automatically resolves to whatever folder this YAML file is saved in.
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
+  # Connection details for our simulated SIS database running in PostgreSQL
   vars:
     db_host: "10.2.8.106"
     db_port: 5432
     db_name: "hr_db"
 
   tasks:
+    # "ansible.builtin.command" runs a standard Linux terminal command—here it launches our Python sync script
     - name: Execute High-Speed Parallel Authentik User & Group Sync
       ansible.builtin.command:
         cmd: "python3 {{ playbook_dir }}/sync_authentik.py"
+      # "environment" passes variables privately into Python (where Python reads them with os.environ).
+      # Double curly braces {{ ... }} tell Ansible to plug in the saved variable values here.
       environment:
         AUTHENTIK_URL: "{{ vault_authentik_url }}"
         AUTHENTIK_TOKEN: "{{ vault_authentik_token }}"
         DB_HOST: "{{ db_host }}"
+        # "| string" turns the number 5432 into text "5432" because Linux environment variables only hold text
         DB_PORT: "{{ db_port | string }}"
         DB_NAME: "{{ db_name }}"
         DB_USER: "{{ vault_db_user }}"
         DB_PASSWORD: "{{ vault_db_password }}"
+      # "register" captures everything the Python script prints to the screen and saves it in authentik_sync_out
       register: authentik_sync_out
+      # Normally Ansible assumes any shell/command task always changes something (yellow).
+      # This rule tells Ansible: only mark this step "changed" if the Python output actually says
+      # "Provisioning" or "Binding"—otherwise mark it green ("ok") so reruns show true idempotency.
       changed_when: "'Provisioning' in authentik_sync_out.stdout or 'Binding' in authentik_sync_out.stdout"
 
+    # "ansible.builtin.debug" prints messages to the terminal so we can see what happened during the run
     - name: Display Authentik Sync Execution Log
       ansible.builtin.debug:
+        # ".stdout_lines" splits the Python output into a clean line-by-line list instead of one big block of text
         msg: "{{ authentik_sync_out.stdout_lines }}"

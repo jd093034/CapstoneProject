@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# The line above tells Linux to execute this script using Python 3
+
+# Standard library and third-party modules for PostgreSQL, YAML parsing, CLI flags,
+# subprocess execution (to call ansible-vault), and realistic synthetic name generation (Faker)
 import psycopg2
 import yaml
 import random
@@ -10,12 +14,15 @@ import shutil
 import subprocess
 from faker import Faker
 
+# Initialize Faker to generate realistic first and last names for simulated K-12 students and staff
 fake = Faker()
 
-# Absolute path resolution relative to script location
+# Resolve the absolute directory where this script lives so relative paths to ../vars/vault.yml
+# always work regardless of which working directory you launch python3 from
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# K-12 Campus & Identity Configurations
+# K-12 District Campus & Grade Configurations
+# Maps each school to its valid two-digit grade levels ("00" = Kindergarten through "12" = Senior)
 SCHOOL_CONFIG = [
     {"name": "Oakridge Elementary", "type": "STUDENT", "grades": ["00", "01", "02", "03", "04", "05"]},
     {"name": "Pinecrest Elementary", "type": "STUDENT", "grades": ["00", "01", "02", "03", "04", "05"]},
@@ -23,25 +30,30 @@ SCHOOL_CONFIG = [
     {"name": "Apex High School", "type": "STUDENT", "grades": ["09", "10", "11", "12"]},
 ]
 
+# K-12 Staff Role & Department Configurations (non-student district employees)
 STAFF_CONFIG = [
     {"user_type": "FACULTY", "dept": "Instructional Staff"},
     {"user_type": "ADMIN", "dept": "Administration"},
     {"user_type": "SUPPORT", "dept": "IT & Operational Support"},
 ]
 
+# Convenience list of all active campus names for random staff campus assignments
 SCHOOL_NAMES = [s["name"] for s in SCHOOL_CONFIG]
 
-# Resolve Vault paths
+# Locate the encrypted Ansible Vault file (vars/vault.yml) and its hidden password file (.vault_pass)
 vault_path = "vars/vault.yml"
 if not os.path.exists(vault_path):
     vault_path = os.path.join(SCRIPT_DIR, "..", "vars", "vault.yml")
 
 vault_pass_path = os.path.join(os.path.dirname(vault_path), ".vault_pass")
 
+
 def load_vault_config(v_path, p_path):
     """Decrypts Ansible Vault file in memory to retrieve connection secrets."""
+    # Find the ansible-vault CLI binary on the system PATH (defaulting to /usr/bin/ansible-vault)
     vault_bin = shutil.which("ansible-vault") or "/usr/bin/ansible-vault"
     
+    # Run "ansible-vault view" in memory so decrypted passwords are never written to plain-text files
     if os.path.exists(v_path) and os.path.exists(p_path) and os.path.exists(vault_bin):
         try:
             cmd = [
@@ -59,7 +71,7 @@ def load_vault_config(v_path, p_path):
         except Exception as e:
             print(f"[!] Warning: Could not decrypt vault via ansible-vault: {e}")
 
-    # Fallback to plain YAML read if unencrypted
+    # Fallback: read directly as plain YAML if vault.yml is unencrypted in a local dev environment
     try:
         with open(v_path, "r") as f:
             parsed = yaml.safe_load(f)
@@ -70,7 +82,8 @@ def load_vault_config(v_path, p_path):
 
     return {}
 
-# Load decrypted vault parameters
+
+# Load decrypted PostgreSQL connection settings from Ansible Vault
 vault = load_vault_config(vault_path, vault_pass_path)
 
 DB_HOST = vault.get("db_host", "10.2.8.106")
@@ -79,7 +92,9 @@ DB_USER = vault.get("vault_db_user") or vault.get("db_user", "postgres")
 DB_PASS = vault.get("vault_db_password") or vault.get("db_password", "MySecretAnsibleToken123!")
 DB_PORT = vault.get("db_port", 5432)
 
+
 def get_db_connection():
+    """Opens and returns an active psycopg2 connection to the PostgreSQL SIS database."""
     return psycopg2.connect(
         host=DB_HOST,
         dbname=DB_NAME,
@@ -88,20 +103,24 @@ def get_db_connection():
         port=DB_PORT
     )
 
+
 def generate_new_hire(cursor, existing_usernames, verbose=True):
     """
     Generates a unique K-12 identity (80% Student, 20% Staff).
     Ensures unique usernames and valid school/grade mappings.
     """
+    # Realistic K-12 demographic ratio: 80% student enrollments, 20% staff hires
     is_student = random.random() < 0.8
     
     while True:
         first_name = fake.first_name()[:50]
         last_name = fake.last_name()[:50]
         
+        # Strip spaces and apostrophes to build clean Active Directory / email-safe usernames
         clean_first = first_name[0].lower().replace(" ", "").replace("'", "")
         clean_last = last_name.lower().replace(" ", "").replace("'", "")
         
+        # Students get a 3-digit suffix (e.g., jsmith482); staff get first-initial + last-name (e.g., jsmith)
         if is_student:
             base_username = f"{clean_first}{clean_last}{random.randint(100, 999)}"[:45]
         else:
@@ -110,6 +129,7 @@ def generate_new_hire(cursor, existing_usernames, verbose=True):
         username = base_username
         counter = 1
         
+        # Guarantee uniqueness against both the PostgreSQL table and users created earlier in this run
         while True:
             cursor.execute("SELECT 1 FROM employees WHERE username = %s;", (username,))
             if not cursor.fetchone() and username not in existing_usernames:
@@ -119,6 +139,7 @@ def generate_new_hire(cursor, existing_usernames, verbose=True):
             
         email = f"{username}@apex.lab"[:50]
         
+        # Assign K-12 organizational attributes based on student vs. staff role
         if is_student:
             user_type = "STUDENT"
             school_info = random.choice(SCHOOL_CONFIG)
@@ -132,6 +153,7 @@ def generate_new_hire(cursor, existing_usernames, verbose=True):
             grade_level = "N/A"
             department = staff_info["dept"]
         
+        # Insert the new ACTIVE identity into PostgreSQL (legal_hold defaults to False)
         query = """
         INSERT INTO employees (first_name, last_name, username, user_type, school, grade_level, department, email, status, legal_hold)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', False)
@@ -139,6 +161,7 @@ def generate_new_hire(cursor, existing_usernames, verbose=True):
         """
         cursor.execute(query, (first_name, last_name, username, user_type, school, grade_level, department, email))
         
+        # Print structured event tags ("ENROLLED:" / "HIRED:") that audit_reconciliation.py parses for metrics
         if cursor.rowcount > 0:
             if verbose:
                 if is_student:
@@ -148,12 +171,14 @@ def generate_new_hire(cursor, existing_usernames, verbose=True):
             existing_usernames.add(username)
             return username
 
+
 def simulate_department_transfer(cursor, exclude_usernames=None):
     """
     Simulates grade promotion/graduation for students or school reassignment for staff.
     """
     exclude_usernames = exclude_usernames or set()
     
+    # Select one random ACTIVE user who hasn't already been modified during this pipeline run
     if exclude_usernames:
         query = """
             SELECT username, user_type, school, grade_level, department 
@@ -177,7 +202,7 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
         
         if user_type == "STUDENT":
             if current_grade == "12" or current_grade == "GRAD":
-                # Senior Graduation Event -> Shift to Graduates OU & GRP_Graduates
+                # Senior Graduation Event: moves student out of Grade 12 into the Graduates alumni cohort
                 new_grade = "GRAD"
                 new_school = "Graduates"
                 new_dept = "Alumni"
@@ -189,7 +214,8 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
                 """, (new_school, new_grade, new_dept, username))
                 print(f"[*] GRADUATED: {username} | Apex High School (Grade 12) -> Graduates OU")
             else:
-                # Standard Grade promotion logic
+                # Standard Grade Promotion: advances grade by +1 and automatically promotes across campuses
+                # (Elementary Grades 00-05 -> Lakeside Middle 06-08 -> Apex High 09-12)
                 grade_int = int(current_grade) if current_grade.isdigit() else 0
                 new_grade_int = grade_int + 1
                 
@@ -216,7 +242,7 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
                     WHERE username = %s;
                 """, (new_school, new_grade, new_dept, username))
         else:
-            # Staff school transfer logic
+            # Staff Campus Transfer: reassigns employee to a different district school
             available_schools = [s for s in SCHOOL_NAMES if s != current_school]
             new_school = random.choice(available_schools)
             
@@ -230,12 +256,14 @@ def simulate_department_transfer(cursor, exclude_usernames=None):
         return username
     return None
 
+
 def simulate_termination(cursor, exclude_usernames=None):
     """
     Simulates student withdrawal or staff termination.
     """
     exclude_usernames = exclude_usernames or set()
     
+    # Pick one random ACTIVE user not yet modified in this run
     if exclude_usernames:
         query = """
             SELECT username, user_type, school 
@@ -256,6 +284,8 @@ def simulate_termination(cursor, exclude_usernames=None):
     user = cursor.fetchone()
     if user:
         username, user_type, school = user
+        # Mark the record TERMINATED and stamp terminated_at = NOW() so downstream AD/Authentik
+        # offboarding playbooks immediately disable login access and start the 30-day retention clock
         cursor.execute("""
             UPDATE employees 
             SET status = 'TERMINATED',
@@ -269,8 +299,11 @@ def simulate_termination(cursor, exclude_usernames=None):
         return username
     return None
 
+
+# Standard Python CLI entry point: parses command-line flags and runs the requested SIS simulation
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="K-12 SIS Identity Event Generator")
+    # --count runs bulk initial database seeding (e.g., --count 1000); otherwise runs incremental events
     parser.add_argument("--count", type=int, default=None, help="Bulk initial seeding count (overrides hires/transfers/terms)")
     parser.add_argument("--hires", type=int, default=3, help="Number of new enrollments/staff hires to generate")
     parser.add_argument("--transfers", type=int, default=1, help="Number of grade/school transitions to generate")
@@ -282,9 +315,11 @@ if __name__ == "__main__":
     
     print("--- Simulating SIS (Student Information System) Real-Time Data Stream ---")
     
+    # Tracks usernames touched during this run so one user isn't hired and immediately terminated
     processed_this_run = set()
     
     if args.count:
+        # Bulk Seeding Mode: populates the SIS database with N initial synthetic K-12 identities
         print(f"[*] Bulk seeding SIS database with {args.count} synthetic K-12 student and staff identities...")
         for i in range(args.count):
             verbose_log = (args.count <= 20) or ((i + 1) % 100 == 0)
@@ -292,6 +327,7 @@ if __name__ == "__main__":
             if verbose_log and args.count > 20:
                 print(f"    [+] Seeded {i + 1}/{args.count} identities...")
     else:
+        # Incremental Lifecycle Stream Mode: simulates daily enrollments, grade/campus moves, and withdrawals
         # 1. Generate Enrollments / Hires
         for _ in range(args.hires):
             new_user = generate_new_hire(cursor, processed_this_run, verbose=True)
@@ -310,6 +346,7 @@ if __name__ == "__main__":
             if terminated_user:
                 processed_this_run.add(terminated_user)
     
+    # Commit all database inserts/updates atomically and close the PostgreSQL connection
     conn.commit()
     cursor.close()
     conn.close()

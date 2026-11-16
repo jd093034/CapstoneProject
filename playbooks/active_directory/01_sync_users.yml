@@ -1,21 +1,29 @@
+# Every YAML file starts with three dashes to tell Ansible "a configuration file starts here"
 ---
 # ==============================================================================
 # Playbook: Extract HR Data & Synchronize Active/Inactive Users in AD
 # ==============================================================================
 
-# Phase 1: Query PostgreSQL and generate payload files on controller
+# --- PART 1: Pull student/staff records from PostgreSQL and save them as JSON files ---
+# "hosts: localhost" means Part 1 runs directly on our Linux Ansible control machine
 - name: Extract Active & Terminated HR Records from PostgreSQL
   hosts: localhost
+  # Skip Ansible's automatic hardware/OS check at the beginning—saves a few seconds
   gather_facts: false
+  # Load our encrypted password file (created with ansible-vault) so passwords aren't exposed in plain text.
+  # {{ playbook_dir }} automatically points to whatever folder this playbook file is saved in.
   vars_files:
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
+  # Connection details for our simulated SIS database running in PostgreSQL
   vars:
     db_host: "10.2.8.106"
     db_port: 5432
     db_name: "hr_db"
 
   tasks:
+    # Connect to PostgreSQL and grab every student/staff member marked ACTIVE.
+    # Double curly braces {{ ... }} tell Ansible "plug in the value of this variable here."
     - name: Query Active Employees with K-12 Attributes from PostgreSQL
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
@@ -23,6 +31,7 @@
         login_db: "{{ db_name }}"
         login_user: "{{ vault_db_user }}"
         login_password: "{{ vault_db_password }}"
+        # The pipe "|" lets us write a clean multi-line SQL query without cramming it onto one line
         query: |
           SELECT 
             username, 
@@ -36,8 +45,10 @@
             status
           FROM employees 
           WHERE status = 'ACTIVE';
+      # "register" saves everything PostgreSQL returns into a variable named active_hr_users
       register: active_hr_users
 
+    # Grab everyone who left or was terminated so we can disable/remove their AD accounts
     - name: Query Terminated Employees with Offboarding Metadata
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
@@ -56,12 +67,17 @@
             department, 
             email, 
             status,
+            -- COALESCE means: if terminated_at is blank, use right now (NOW()) instead.
+            -- ::text converts the date into plain text so JSON can read it cleanly.
             COALESCE(terminated_at, NOW())::text AS terminated_at,
+            -- If legal_hold is blank in the database, treat it as FALSE (not on hold)
             COALESCE(legal_hold, FALSE) AS legal_hold
           FROM employees 
           WHERE status IN ('INACTIVE', 'TERMINATED');
       register: inactive_hr_users
 
+    # Group active users by department; json_agg(username) bundles all usernames in each
+    # department into a single list (like ["jsmith1", "adoe2"]).
     - name: Query User-to-Group Mappings from PostgreSQL
       community.postgresql.postgresql_query:
         login_host: "{{ db_host }}"
@@ -76,36 +92,47 @@
           GROUP BY department;
       register: group_mappings
 
+    # "set_fact" creates a brand-new variable (ad_group_assignments) mid-playbook for later steps.
+    # ">-" combines the lines below into one clean string without extra line breaks.
     - name: Map PostgreSQL rows into dynamic pipeline facts
       ansible.builtin.set_fact:
         ad_group_assignments: >-
           [
+            {# {% for ... %} loops through every department row returned by PostgreSQL #}
             {% for row in group_mappings.query_result %}
             {
               "group": "{{ row.group }}",
+              {# "| to_json" converts the member list into valid JSON array format #}
               "members": { "add": {{ row.members | to_json }} }
+            {# Add a comma after every item EXCEPT the last one, since trailing commas break JSON #}
             }{% if not loop.last %},{% endif %}
             {% endfor %}
           ]
 
+    # Write the active user query results to a local JSON file in /tmp on the Linux controller.
+    # "| to_nice_json" formats the raw database rows into clean, readable JSON text.
+    # "mode: '0644'" sets standard Linux file permissions (owner can edit, everyone can read).
     - name: Save active users JSON payload
       ansible.builtin.copy:
         content: "{{ {'dynamic_ad_users': active_hr_users.query_result} | to_nice_json }}"
         dest: "/tmp/dynamic_ad_users.json"
         mode: '0644'
 
+    # Write the terminated/inactive user results to a second JSON file in /tmp
     - name: Save inactive users JSON payload
       ansible.builtin.copy:
         content: "{{ {'dynamic_inactive_users': inactive_hr_users.query_result} | to_nice_json }}"
         dest: "/tmp/dynamic_inactive_users.json"
         mode: '0644'
 
+    # Write the department/group list to JSON for any playbook steps or reports that need it
     - name: Save group assignments JSON payload for AD sync
       ansible.builtin.copy:
         content: "{{ ad_group_assignments | to_nice_json }}"
         dest: "/tmp/dynamic_ad_group_assignments.json"
         mode: '0644'
 
+    # Save a second copy under the old filename so older playbooks/scripts don't break
     - name: Save user group assignments JSON payload (legacy alias)
       ansible.builtin.copy:
         content: "{{ ad_group_assignments | to_nice_json }}"
@@ -113,7 +140,8 @@
         mode: '0644'
 
 
-# Phase 2: Push JSON payloads and execute PowerShell sync on Windows DC
+# --- PART 2: Send those JSON files + our PowerShell script to Windows and run the sync ---
+# "hosts: win_dc" switches targets—everything below runs remotely on our Windows Domain Controller
 - name: Synchronize Users and Organizational Units in Active Directory
   hosts: win_dc
   gather_facts: false
@@ -121,22 +149,30 @@
     - "{{ playbook_dir }}/../../vars/vault.yml"
 
   tasks:
+    # "win_copy" sends files over the network from Linux (src) to Windows C:\Windows\Temp (dest)
     - name: Push active users JSON file to Windows DC
       ansible.windows.win_copy:
         src: /tmp/dynamic_ad_users.json
         dest: C:\Windows\Temp\dynamic_ad_users.json
 
+    # Copy the inactive/terminated users list over to Windows
     - name: Push inactive users JSON file to Windows DC
       ansible.windows.win_copy:
         src: /tmp/dynamic_inactive_users.json
         dest: C:\Windows\Temp\dynamic_inactive_users.json
 
+    # Copy our PowerShell sync script over to Windows so it has the latest version
     - name: Push PowerShell script to Windows DC
       ansible.windows.win_copy:
         src: "{{ playbook_dir }}/sync_users.ps1"
         dest: C:\Windows\Temp\sync_users.ps1
 
+    # "win_shell" runs a command directly on the Windows server.
+    # "-ExecutionPolicy Bypass" lets our script run even if Windows restricts local PowerShell scripts.
     - name: Execute Bulk Active Directory Sync Script
       ansible.windows.win_shell: powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\sync_users.ps1
+      # Pass DEFAULT_PASSWORD into Windows as an environment variable ($env:DEFAULT_PASSWORD in PowerShell).
+      # The chained "| default(...)" acts as a 3-step safety net: use default_user_password if defined,
+      # otherwise check our encrypted vault password, otherwise fall back to 'Welcome2026!'.
       environment:
         DEFAULT_PASSWORD: "{{ default_user_password | default(vault_default_user_password | default('Welcome2026!')) }}"

@@ -1,20 +1,31 @@
+# Three dashes mark the start of a YAML playbook file for Ansible
 ---
 # ==============================================================================
 # Master Pipeline: K-12 District Identity Lifecycle Automation & Reconciliation
 # ==============================================================================
 - name: End-to-End K-12 District Identity Lifecycle Automation Pipeline
+  # "hosts: localhost" runs this master orchestrator on our Linux Ansible control machine
   hosts: localhost
+  # "gather_facts: true" is turned ON so Ansible collects the exact system clock/epoch timestamp
+  # used to measure pipeline runtime and name our timestamped audit log files.
   gather_facts: true
 
+  # Load our encrypted password file (created with ansible-vault) so secrets stay out of plain text
   vars_files:
     - vars/vault.yml
 
+  # Default database connection settings and permanent audit log folder.
+  # "{{ var | default(...) }}" lets command-line "-e" flags override these values if needed.
   vars:
     db_host: "{{ db_host | default('10.2.8.106') }}"
     db_port: "{{ db_port | default(5432) }}"
     db_name: "{{ db_name | default('hr_db') }}"
     log_archive_dir: "/var/log/hr_pipeline"
 
+  # Interactive terminal prompts: asks the operator how many SIS events to simulate.
+  # If req_hires, req_transfers, or req_terms are passed via "-e" on the command line (for automated
+  # benchmark runs), Ansible automatically skips these prompts and uses the passed values.
+  # "private: false" lets you see the numbers as you type them into the terminal.
   vars_prompt:
     - name: req_hires
       prompt: "How many NEW ENROLLMENTS / HIRES do you want to generate?"
@@ -35,12 +46,15 @@
     # =========================================================================
     # Phase 0: Persistent Log Archival & Timing Setup
     # =========================================================================
+    # Save the starting Unix epoch timestamp (seconds since 1970) to /tmp/pipeline_start_time
+    # so Phase 4's audit engine can subtract start time from finish time to calculate total runtime.
     - name: "Phase 0 | Capture Pipeline Start Timestamp"
       ansible.builtin.copy:
         content: "{{ ansible_date_time.epoch }}"
         dest: "/tmp/pipeline_start_time"
         mode: '0644'
 
+    # Create /var/log/hr_pipeline if it doesn't exist yet ("mode: '0755'" = owner can write, all can read)
     - name: "Phase 0 | Ensure persistent log archive directory exists"
       ansible.builtin.file:
         path: "{{ log_archive_dir }}"
@@ -50,6 +64,9 @@
     # =========================================================================
     # Phase 1: K-12 SIS Data Stream Event Generation
     # =========================================================================
+    # Run our Python SIS simulator to insert the requested new hires, grade/campus transfers,
+    # and student/staff terminations into PostgreSQL.
+    # ">" folds the multi-line command into one clean line; "register" saves everything Python prints.
     - name: "Phase 1 | Execute K-12 SIS Identity Event Generator"
       ansible.builtin.command:
         cmd: >
@@ -60,18 +77,22 @@
       register: hr_script_output
       changed_when: true
 
+    # Write the generator's live output to /tmp/hr_gen_output.log so the audit/dashboard engine can read it
     - name: "Phase 1 | Save Live Generator Log to Disk (/tmp Staging)"
       ansible.builtin.copy:
         content: "{{ hr_script_output.stdout | default('') }}"
         dest: "/tmp/hr_gen_output.log"
         mode: '0644'
 
+    # Save a permanent, timestamped backup copy of the SIS events in /var/log/hr_pipeline/.
+    # "| replace(':', '-')" swaps colons in the clock time for dashes so filenames stay clean on Linux.
     - name: "Phase 1 | Archive Timestamped SIS Event Execution Log"
       ansible.builtin.copy:
         content: "{{ hr_script_output.stdout | default('') }}"
         dest: "{{ log_archive_dir }}/sis_gen_{{ ansible_date_time.date }}_{{ ansible_date_time.time | replace(':', '-') }}.log"
         mode: '0644'
 
+    # Print every generated SIS event line to the terminal for immediate visibility
     - name: "Phase 1 | Display Processed SIS Lifecycle Events"
       ansible.builtin.debug:
         msg: "{{ hr_script_output.stdout_lines }}"
@@ -79,6 +100,11 @@
     # =========================================================================
     # Phase 2: Multi-System Sync Execution (site.yml)
     # =========================================================================
+    # Launch the core synchronization playbook (site.yml) with 20 parallel workers ("-f 20")
+    # to push the PostgreSQL changes into Windows Active Directory and Authentik SSO.
+    # "ANSIBLE_HOST_KEY_CHECKING: False" prevents SSH fingerprint prompts from stalling automation.
+    # "ignore_errors: true" ensures that even if a downstream sync task hits an error, the pipeline
+    # STILL continues to Phase 4 so logs are archived and the audit engine flags the exact mismatch!
     - name: "Phase 2 | Trigger Master Synchronization Playbook (site.yml)"
       ansible.builtin.command:
         cmd: >
@@ -91,12 +117,14 @@
       register: sync_result
       ignore_errors: true
 
+    # Save a live copy of the sync playbook's output to /tmp for the web dashboard's log viewer
     - name: "Phase 2 | Save Live Pipeline Stdout Log to Disk (/tmp Staging)"
       ansible.builtin.copy:
         content: "{{ sync_result.stdout | default('') }}"
         dest: "/tmp/pipeline_stdout.log"
         mode: '0644'
 
+    # Save a permanent, timestamped compliance archive of the sync run in /var/log/hr_pipeline/
     - name: "Phase 2 | Archive Timestamped Pipeline Execution Log"
       ansible.builtin.copy:
         content: "{{ sync_result.stdout | default('') }}"
@@ -106,6 +134,7 @@
     # =========================================================================
     # Phase 3: Console Summary
     # =========================================================================
+    # Print the full synchronization output inside a formatted banner on the terminal
     - name: "Phase 3 | Render Executive Lifecycle Summary"
       ansible.builtin.debug:
         msg: |
@@ -117,12 +146,17 @@
     # =========================================================================
     # Phase 4: High-Speed Multi-Endpoint Audit & Report Publishing
     # =========================================================================
+    # Make sure the local staging folder for generated HTML dashboard pages exists
     - name: "Phase 4 | Ensure reports directory exists locally"
       ansible.builtin.file:
         path: "/root/ansible/reports"
         state: directory
         mode: '0755'
 
+    # Run our Python reconciliation engine to verify live state across PostgreSQL, Windows AD
+    # (10.2.8.67), and Authentik SSO, calculate elapsed runtime, and render all 4 HTML reports.
+    # The chained "| default(...)" expressions on AD_USER and AD_PASSWORD check multiple possible
+    # vault variable names so the playbook works cleanly regardless of vault key naming conventions.
     - name: "Phase 4 | Execute K-12 Reconciliation Audit Engine"
       ansible.builtin.command:
         cmd: "python3 scripts/audit_reconciliation.py"
@@ -140,10 +174,14 @@
         AD_DOMAIN: "{{ ad_domain | default('apex.lab') }}"
       register: audit_exec_output
 
+    # Print the reconciliation accuracy score and mismatch summary to the console
     - name: "Phase 4 | Display Reconciliation Engine Audit Summary"
       ansible.builtin.debug:
         msg: "{{ audit_exec_output.stdout_lines }}"
 
+    # Push the freshly built HTML dashboard files from /root/ansible/reports/ straight into
+    # Nginx's live web root (/var/www/html/) on our dedicated web server (10.2.8.68) over SSH.
+    # "delegate_to: 10.2.8.68" redirects just this copy step from localhost to the Nginx VM.
     - name: "Phase 4 | Publish HTML Reports to Nginx Web Root on 10.2.8.68"
       ansible.builtin.copy:
         src: "/root/ansible/reports/"

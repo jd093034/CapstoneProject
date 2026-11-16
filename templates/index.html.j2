@@ -1,10 +1,16 @@
+<!-- Tells the web browser this is a modern HTML5 webpage -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Sets character encoding so special symbols (like × and •) display cleanly -->
     <meta charset="UTF-8">
+    <!-- Makes the page layout scale properly on laptops, tablets, and phones -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Title shown on the browser tab -->
     <title>K-12 District Identity Lifecycle Report - Executive Overview</title>
     <style>
+        /* ":root" stores reusable color swatches (--variable-name) so our dark-mode theme
+           stays consistent across the entire dashboard without repeating hex color codes. */
         :root {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
@@ -19,6 +25,7 @@
             --border-color: #334155;
         }
 
+        /* Base page styling: dark slate background, light text, and clean system fonts */
         html, body {
             min-height: 100vh;
             margin: 0;
@@ -28,6 +35,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
+        /* Flexbox centers the dashboard and pushes the footer cleanly to the bottom of the screen */
         body {
             display: flex;
             flex-direction: column;
@@ -37,12 +45,14 @@
             box-sizing: border-box;
         }
 
+        /* Keeps the overview width capped at 900px so metric cards look crisp and balanced */
         .container {
             max-width: 900px;
             width: 100%;
             margin: 0 auto;
         }
 
+        /* Top title bar: pushes the page title to the left and the SUCCESS/FAILED badge to the right */
         .header {
             display: flex;
             justify-content: space-between;
@@ -63,6 +73,7 @@
             font-size: 14px;
         }
 
+        /* Pill-shaped green badge in the top-right showing overall pipeline health */
         .status-badge {
             padding: 6px 16px;
             border-radius: 20px;
@@ -75,13 +86,14 @@
             border: 1px solid var(--accent-green);
         }
 
+        /* Turns the top-right badge red automatically if the pipeline reports FAILED */
         .status-badge.failed {
             background-color: rgba(239, 68, 68, 0.15);
             color: var(--accent-red);
             border-color: var(--accent-red);
         }
 
-        /* Navigation Bar */
+        /* Navigation Bar linking all 4 static HTML dashboard pages */
         .navbar {
             display: flex;
             gap: 12px;
@@ -107,13 +119,14 @@
             border-color: var(--accent-blue);
         }
 
+        /* Highlights whichever page tab the user is currently viewing */
         .nav-tab.active {
             color: #0f172a;
             background-color: var(--accent-blue);
             border-color: var(--accent-blue);
         }
 
-        /* Metrics Grid */
+        /* Responsive 4-column grid for sync accuracy and operational count cards */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -153,7 +166,7 @@
             margin-top: 6px;
         }
 
-        /* Efficiency Grid */
+        /* Responsive 3-column grid for Manual Baseline vs. Net Time Saved vs. Efficiency Gain */
         .comparison-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -171,6 +184,7 @@
             overflow: hidden;
         }
 
+        /* Color-coded thick left accent borders distinguishing each ROI comparison card */
         .comparison-card.manual { border-left: 4px solid var(--accent-yellow); }
         .comparison-card.net-saved { border-left: 4px solid var(--accent-purple); }
         .comparison-card.efficiency { border-left: 4px solid var(--accent-blue); }
@@ -205,7 +219,7 @@
             line-height: 1.4;
         }
 
-        /* SLA Methodology Banner */
+        /* Bottom callout box explaining the 15-minute-per-event time-savings formula */
         .methodology-banner {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -241,6 +255,7 @@
             border-radius: 12px;
         }
 
+        /* Dark inset bar displaying the live "Events × 15 mins = Total Saved" equation */
         .formula-box {
             background-color: #0b1120;
             border: 1px solid var(--border-color);
@@ -316,7 +331,7 @@
             letter-spacing: 0.3px;
         }
 
-        /* Warning Banner for Desync Detection */
+        /* Red alert box that only appears if any active OR disabled user is out of sync */
         .warning-banner {
             background-color: rgba(239, 68, 68, 0.15);
             border: 1px solid var(--accent-red);
@@ -350,18 +365,23 @@
         <div class="title-area">
             <h1>K-12 District Identity Lifecycle Report</h1>
             <div class="timestamp">
+                {# Jinja2 logic ({% ... %}): converts Ansible's 24-hour military clock into a 12-hour AM/PM clock. #}
+                {# "% 12" gets the remainder after dividing by 12 (so 14:00 becomes 2); midnight/noon (0) becomes 12. #}
                 {% set hour_12 = ansible_facts['date_time']['hour'] | int % 12 %}
                 {% set hour_12 = 12 if hour_12 == 0 else hour_12 %}
                 {% set am_pm = 'PM' if (ansible_facts['date_time']['hour'] | int) >= 12 else 'AM' %}
+                {# "%02d" pads single-digit hours with a leading zero (e.g., "02:05:09 PM") #}
                 Generated on {{ ansible_facts['date_time']['date'] }} at {{ "%02d" % hour_12 }}:{{ ansible_facts['date_time']['minute'] }}:{{ ansible_facts['date_time']['second'] }} {{ am_pm }} {{ ansible_facts['date_time']['tz'] }}
             </div>
         </div>
+        {# Checks overall_status first; if not set, checks if Ansible's exit code (sync_result.rc) was 0 (SUCCESS) #}
         {% set main_status = overall_status | default('SUCCESS' if sync_result.rc | default(0) == 0 else 'FAILED') %}
         <div class="status-badge {% if main_status == 'FAILED' %}failed{% endif %}">
             {{ main_status }}
         </div>
     </div>
 
+    <!-- Top navigation tabs connecting all 4 static HTML dashboard pages -->
     <nav class="navbar">
         <a href="index.html" class="nav-tab active">Overview</a>
         <a href="active.html" class="nav-tab">Active Identities</a>
@@ -369,31 +389,39 @@
         <a href="logs.html" class="nav-tab">Audit & System Logs</a>
     </nav>
 
-    <!-- 1. Live System Synchronization Audit -->
+    <!-- 1. Live System Synchronization Audit (combines BOTH Active and Disabled endpoint checks) -->
     <div class="card">
         <h2>Live System Synchronization Audit</h2>
 
+        {# Add together mismatches from disabled accounts + mismatches from active accounts
+           to get the district-wide total across every single managed user. #}
         {% set disabled_mismatches = total_mismatches | default(0) | int %}
         {% set active_mismatches = total_active_mismatches | default(0) | int %}
         {% set total_mismatches_cnt = disabled_mismatches + active_mismatches %}
         
+        {# Separate mismatch totals for Active Directory vs. Authentik SSO #}
         {% set ad_mismatches_total = (ad_mismatches | default(0) | int) + (ad_active_mismatches | default(0) | int) %}
         {% set ak_mismatches_total = (authentik_mismatches | default(0) | int) + (authentik_active_mismatches | default(0) | int) %}
         
+        {# Total accounts managed = active users + terminated/disabled users #}
         {% set target_active = total_target_active | default(total_active_managed | default(0)) | int %}
         {% set target_terms = total_target_terms | default(dynamic_inactive_users | default([]) | length) | int %}
         {% set total_target = target_active + target_terms %}
 
+        {# Total verified accounts in Active Directory and Authentik across both active and disabled states #}
         {% set ad_synced_total = (ad_active_synced_count | default(target_active) | int) + (ad_synced_count | default(target_terms) | int) %}
         {% set ak_synced_total = (authentik_active_synced_count | default(target_active) | int) + (authentik_synced_count | default(target_terms) | int) %}
 
+        {# Total verification checks performed (2 checks per user: 1 in AD + 1 in Authentik) #}
         {% set total_probes_all = (total_active_probes_conducted | default(0) | int) + (total_probes_conducted | default(0) | int) %}
         {% set total_verified_all = (total_active_verified_matches | default(0) | int) + (total_verified_matches | default(0) | int) %}
         {% set accuracy = overall_sync_accuracy_rate | default(100.0) %}
 
+        <!-- 4-Card District-Wide Sync Summary Grid -->
         <div class="metrics-grid" style="margin-bottom: 0;">
             <div class="metric-card">
                 <span class="metric-label">Sync Accuracy Rate</span>
+                {# Shows green if 100.0% accurate, or yellow if any desync mismatch was detected #}
                 <span class="metric-value" style="color: {{ 'var(--accent-green)' if accuracy == 100.0 else 'var(--accent-yellow)' }};">
                     {{ accuracy }}%
                 </span>
@@ -410,6 +438,7 @@
                 <span class="metric-value" style="color: {{ 'var(--accent-blue)' if ad_mismatches_total == 0 else 'var(--accent-red)' }};">
                     {{ ad_synced_total }} / {{ total_target }}
                 </span>
+                {# "~" is Jinja2's text-joining symbol: glues the mismatch count onto ' Mismatches' #}
                 <span class="metric-subtext" style="color: {{ 'var(--accent-green)' if ad_mismatches_total == 0 else 'var(--accent-red)' }};">
                     {{ '100% Synced' if ad_mismatches_total == 0 else ad_mismatches_total ~ ' Mismatches' }}
                 </span>
@@ -434,9 +463,11 @@
             </div>
         </div>
 
+        {# Conditional red warning box: only appears if any active OR disabled account is out of sync #}
         {% if total_mismatches_cnt > 0 %}
         <div class="warning-banner">
             <strong>Sync Verification Warning:</strong> Detected {{ total_mismatches_cnt }} desynchronized endpoint state(s) across Active & Disabled accounts.
+            {# "| join(', ')" turns each list of out-of-sync usernames into a clean comma-separated list #}
             {% if authentik_mismatch_list is defined and authentik_mismatch_list | length > 0 %}
                 <br/>
                 <strong>Authentik SSO Disabled Mismatches:</strong> {{ authentik_mismatch_list | join(', ') }}
@@ -457,7 +488,11 @@
         {% endif %}
     </div>
 
-    <!-- Parse Execution Runtime & Metrics -->
+    <!-- Parse Execution Runtime & Efficiency Math -->
+    {# 1. Use auto_secs directly if already measured in seconds;
+       2. Otherwise, split Ansible's stopwatch string (sync_result.delta, formatted like "0:00:12.345")
+          at the colons ":" and convert hours*3600 + minutes*60 + seconds into total seconds;
+       3. Otherwise fall back to 12.0 seconds. #}
     {% if auto_secs is defined and auto_secs | float > 0 %}
         {% set auto_secs = auto_secs | float %}
     {% elif sync_result is defined and sync_result.delta is defined and ':' in (sync_result.delta | string) %}
@@ -467,14 +502,17 @@
         {% set auto_secs = 12.0 %}
     {% endif %}
 
+    {# Calculate ROI metrics comparing manual IT hours against automated pipeline seconds #}
     {% set manual_mins = est_time_saved_mins | int | default(0) %}
     {% set manual_secs = manual_mins * 60 %}
     {% set net_saved_secs = manual_secs - auto_secs if manual_secs > auto_secs else 0 %}
     {% set net_saved_mins = (net_saved_secs / 60) | round(1) %}
+    {# Speedup multiplier (e.g., 15,000 manual secs / 12 auto secs = 1250x faster) #}
     {% set speedup_factor = (manual_secs / auto_secs) | round(0) | int if auto_secs > 0 else 300 %}
+    {# Percentage of manual labor eliminated #}
     {% set pct_reduction = (((manual_secs - auto_secs) / manual_secs) * 100) | round(1) if manual_secs > 0 else 99.5 %}
 
-    <!-- 2. Operational Counts Grid -->
+    <!-- 2. Operational Counts Grid (Events, Lifecycle Breakdown, Total Managed, Runtime) -->
     <div class="metrics-grid">
         <div class="metric-card">
             <span class="metric-label">Total Events</span>
@@ -484,6 +522,7 @@
         <div class="metric-card">
             <span class="metric-label">Enrollments / Promotions / Withdrawals</span>
             <span class="metric-value">
+                {# Color-coded counts: green for enrollments, yellow for grade/campus transfers, red for withdrawals #}
                 <span style="color: var(--accent-green);">{{ count_hires | default(0) }}</span> /
                 <span style="color: var(--accent-yellow);">{{ count_transfers | default(0) }}</span> /
                 <span style="color: var(--accent-red);">{{ count_terminations | default(0) }}</span>
@@ -501,19 +540,21 @@
         <div class="metric-card">
             <span class="metric-label">Pipeline Runtime</span>
             <span class="metric-value" style="color: var(--accent-green);">
+                {# "%.1f" | format(...) rounds the runtime cleanly to 1 decimal place (e.g., "12.4 secs") #}
                 {{ "%.1f" | format(auto_secs) }} secs
             </span>
             <span class="metric-subtext">Automated Execution</span>
         </div>
     </div>
 
-    <!-- 3. Efficiency Comparison -->
+    <!-- 3. Efficiency Comparison Cards -->
     <div class="comparison-grid">
         <div class="comparison-card manual">
             <div class="comparison-header">
                 <span class="comparison-title">Manual SLA Baseline</span>
             </div>
             <div class="comparison-stat" style="color: var(--accent-yellow);">
+                {# Automatically adds the hour equivalent in parentheses once total minutes reach 60+ #}
                 {% if manual_mins >= 60 %}
                     {{ manual_mins }} mins ({{ (manual_mins / 60) | round(1) }} hrs)
                 {% else %}
@@ -554,7 +595,7 @@
         </div>
     </div>
 
-    <!-- 4. SLA Methodology Banner -->
+    <!-- 4. SLA Methodology Banner (displays the transparent formula behind the ROI cards above) -->
     <div class="methodology-banner">
         <div class="methodology-header">
             <span class="methodology-title">SLA & Automation Efficiency Model</span>
